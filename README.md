@@ -4,13 +4,13 @@ Control YouTube on a Windows laptop from an Android phone over home Wi-Fi. The W
 
 ## Downloads and support
 
-[Download for Windows](https://github.com/gaffar273/GlideYT/releases/latest/download/GlideYT-Windows.zip) · [Download for Android](https://github.com/gaffar273/GlideYT/releases/latest/download/GlideYT-Android.apk) · [Setup guide](https://agslabs.tech/product/glideYT#guide) · [Report an issue](https://github.com/gaffar273/GlideYT/issues)
+[Download for Windows](https://github.com/gaffar273/GlideYT/releases/latest/download/GlideYT-Setup.exe) · [Download for Android](https://github.com/gaffar273/GlideYT/releases/latest/download/GlideYT-Android.apk) · [Setup guide](https://agslabs.tech/product/glideYT#guide) · [Report an issue](https://github.com/gaffar273/GlideYT/issues)
 
-Install [Node.js](https://nodejs.org/en/download) 22.11 or later on Windows and have Edge or Chrome available. Extract the entire Windows ZIP into a writable folder and open **GlideYT.exe**. The ZIP contains the companion and the signed Android APK. Running the packaged app requires no npm installation.
+Run **GlideYT-Setup.exe** on a 64-bit Windows PC and open **GlideYT** from Start. Setup installs the companion, the Node.js runtime and the signed Android APK for your Windows account. Use Edge or Chrome for YouTube. See the [Windows troubleshooting guide](https://agslabs.tech/troubleshooting/windows) for download and installation warnings.
 
 ## Get started
 
-1. Double-click **GlideYT.exe** in this folder. Keep the executable alongside the project files. **Start-GlideYT.cmd** also opens it and builds the Windows executable if needed.
+1. Open **GlideYT** from Start. If you are running the source checkout, install Node.js 22.11 or later and use **Start-GlideYT.cmd**.
 2. Choose **Install Android app** and scan the QR code with the phone camera. Install the APK. You can also transfer `dist/android/glide-yt-0.1.0.apk` by USB. The APK supports arm64 phones running Android 7 or later.
 3. Choose **Show pairing code** on Windows. Tap **Scan QR code** inside the Android app and point it at the laptop. For manual pairing, find the address under the gear icon in Windows. Both devices must use the same trusted Wi-Fi.
 4. Choose **Open YouTube** on Windows. Search on the phone and tap a video to play it on the laptop. The remote shows artwork, title, playback time, play/pause, and ten-second skips.

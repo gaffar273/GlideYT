@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -84,7 +84,8 @@ class LanTube {
     }
 
     async Task<string> RunNode(string script, string input) {
-        var settings = new ProcessStartInfo("node.exe", script) {
+        var bundledNode = Path.Combine(root, "runtime", "node.exe");
+        var settings = new ProcessStartInfo(File.Exists(bundledNode) ? bundledNode : "node.exe", script) {
             CreateNoWindow = true, UseShellExecute = false, WorkingDirectory = root,
             RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true
         };
