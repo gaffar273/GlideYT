@@ -9,6 +9,7 @@ export function readState() {
     connected: true, videoId, title, playing: Boolean(video && !video.paused && !video.ended),
     position: video && Number.isFinite(video.currentTime) ? video.currentTime : 0,
     duration: video && Number.isFinite(video.duration) ? video.duration : 0,
+    repeat: video && videoId && Number.isFinite(video.duration) && video.duration > 0 ? Boolean(video.loop) : null,
     live: Boolean(video && video.duration === Infinity), volume: video?.volume ?? 1,
     ready: Boolean(video && video.readyState > 0), observedAt: Date.now(),
     thumbnail: /^[a-zA-Z0-9_-]{11}$/.test(videoId || '') ? 'https://i.ytimg.com/vi/' + videoId + '/mqdefault.jpg' : null,
@@ -20,6 +21,10 @@ export async function controlPlayer(command) {
   const video = document.querySelector('video.html5-main-video') || document.querySelector('video');
   if (!video) return {ok: false, error: 'Choose a video first, or finish the prompt on the laptop.'};
   switch (command.type) {
+    case 'repeat':
+      if (!Number.isFinite(video.duration) || video.duration <= 0) return {ok: false, error: 'Repeat requires a recorded video.'};
+      video.loop = command.enabled;
+      break;
     case 'play':
       try { await video.play(); } catch { return {ok: false, error: 'Click Play on the laptop once to enable playback.'}; }
       break;

@@ -16,11 +16,23 @@ async function pageAction(cmd, read, control) {
     const el = player?.querySelector('.ytp-' + name + '-button');
     return el && el.getAttribute('aria-disabled') !== 'true' && getComputedStyle(el).display !== 'none' ? el : null;
   };
+  function shuffleButton() {
+    if (!url.searchParams.get('list')) return null;
+    return document.querySelector('ytd-playlist-panel-renderer button[aria-label*="shuffle" i][aria-pressed]:not(:disabled):not([aria-disabled="true"])');
+  }
   function state() {
-    return {...read(), listId: url.searchParams.get('list'), hasNext: !!available('next'), hasPrevious: !!available('prev')};
+    const shuffle = shuffleButton()?.getAttribute('aria-pressed');
+    return {...read(), listId: url.searchParams.get('list'), hasNext: !!available('next'), hasPrevious: !!available('prev'),
+      shuffle: shuffle === 'true' || shuffle === 'false' ? shuffle === 'true' : null};
   }
   if (cmd.type === 'state') return state();
-  if (['play','pause','seek','volume'].includes(cmd.type)) {
+  if (cmd.type === 'shuffle') {
+    const button = shuffleButton();
+    if (!button) throw Error('Shuffle is unavailable for this playlist.');
+    if ((button.getAttribute('aria-pressed') === 'true') !== cmd.enabled) button.click();
+    return {ok:true,state:state()};
+  }
+  if (['play','pause','seek','volume','repeat'].includes(cmd.type)) {
     const result = await control(cmd);
     if (!result.ok) throw Error(result.error);
     return {ok:true,state:state()};
@@ -38,15 +50,19 @@ async function pageAction(cmd, read, control) {
   }
   if (cmd.type === 'quality') {
     const button = player?.querySelector('.ytp-settings-button');
-    if (!button) throw Error('Quality settings are unavailable.');
+    const unavailable = {options: [], current: null};
+    if (!button) return unavailable;
     const waitFor = async find => {
       for (let i=0;i<20;i++) { const value=find(); if(value) return value; await new Promise(r=>setTimeout(r,50)); }
-      throw Error('YouTube did not show its quality options.');
+      return null;
     };
     if (button.getAttribute('aria-expanded') === 'true') button.click();
     button.click();
     try {
-      const item = await waitFor(() => [...player.querySelectorAll('.ytp-menuitem')].find(e=>e.textContent.trim().startsWith('Quality')));
+      const item = await waitFor(() => [...player.querySelectorAll('.ytp-menuitem')].find(el =>
+        /^quality/i.test((el.querySelector('.ytp-menuitem-label')?.textContent || el.getAttribute('aria-label') || el.textContent).trim()) ||
+        /\b\d{2,4}p\b/i.test(el.querySelector('.ytp-menuitem-content')?.textContent || '')));
+      if (!item) return unavailable;
       item.click();
       const entries = await waitFor(() => {
         const rows = [...player.querySelectorAll('[role="menuitemradio"]')].map(el=>({el,
@@ -54,9 +70,10 @@ async function pageAction(cmd, read, control) {
           .filter(r=>r.name && !/Premium/i.test(r.el.textContent));
         return rows.length ? rows : null;
       });
+      if (!entries) return unavailable;
       if (cmd.option !== undefined) {
         const choice = entries.find(r=>r.name===cmd.option);
-        if (!choice) throw Error('That resolution is unavailable.');
+        if (!choice) return unavailable;
         choice.el.click();
       }
       return {options:entries.map(r=>r.name),current:cmd.option ?? entries.find(r=>r.el.getAttribute('aria-checked')==='true')?.name};

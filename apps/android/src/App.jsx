@@ -133,6 +133,13 @@ function RemoteScreen({session, onDisconnect}) {
   const {height, width} = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [settings, setSettings] = useState(null);
+  const [unavailableQuality, setUnavailableQuality] = useState(null);
+  const track = state?.videoId === 'windows-session' ? state.title : state?.videoId;
+  useEffect(() => {
+    if (!unavailableQuality) return;
+    const timer = setTimeout(() => setUnavailableQuality(null), 15000);
+    return () => clearTimeout(timer);
+  }, [unavailableQuality]);
   const [view, setView] = useState('player');
   const [collection, setCollection] = useState(null);
   const [episodes, setEpisodes] = useState([]);
@@ -198,7 +205,8 @@ function RemoteScreen({session, onDisconnect}) {
   async function setting(type, option) {
     if (option === undefined && settings?.type === type) { setSettings(null); return; }
     const result = await command({type, option});
-    setSettings(result?.options && option === undefined ? {...result, type, videoId: state?.videoId} : null);
+    if (type === 'quality' && result?.options?.length === 0) setUnavailableQuality(track);
+    setSettings(result?.options?.length && option === undefined ? {...result, type, videoId: state?.videoId} : null);
   }
   const control = (label, action, disabled, accessibilityLabel = label, selected = false) =>
     <Pressable key={accessibilityLabel} accessibilityRole="button" accessibilityLabel={accessibilityLabel}
@@ -227,6 +235,18 @@ function RemoteScreen({session, onDisconnect}) {
         <View style={styles.playButton}><Button playback icon={state?.playing ? 'pause' : 'play'} label={state?.playing ? 'Pause' : 'Play'} pending={busy} disabled={!state?.ready} onPress={() => command({type: state?.playing ? 'pause' : 'play'})}/></View>
         <Button icon="forward" label="Forward 10 seconds" secondary pending={busy} disabled={!state?.ready || state?.live} onPress={() => seek(10)}/>
       </View>
+      {(typeof state?.repeat === 'boolean' || typeof state?.shuffle === 'boolean' || Number.isFinite(state?.sleepUntil)) &&
+        <View style={[styles.settingChoices, styles.queue]}>
+          {typeof state.repeat === 'boolean' && control('Repeat 1', () => command({type:'repeat', enabled:!state.repeat}), !state.ready, 'Repeat current track', state.repeat)}
+          {typeof state.shuffle === 'boolean' && control('Shuffle', () => command({type:'shuffle', enabled:!state.shuffle}), !state.ready, 'Shuffle playback', state.shuffle)}
+          {Number.isFinite(state.sleepUntil) && control(state.sleepUntil ? 'Sleep · ' + Math.max(1, Math.ceil((state.sleepUntil - Date.now()) / 60000)) + 'm' : 'Sleep timer',
+            () => setSettings(settings?.type === 'sleep' ? null : {type:'sleep', videoId:state.videoId}), !state.ready && !state.sleepUntil, 'Sleep timer', !!state.sleepUntil)}
+        </View>}
+      {settings?.type === 'sleep' && settings.videoId === state?.videoId && <View style={[styles.settingChoices, styles.queue]}>
+        {[15,30,60,0].map(minutes => control(minutes ? minutes + ' min' : 'Off', async () => {
+          await command({type:'sleep', minutes}); setSettings(null);
+        }, false))}
+      </View>}
       {hasQueue && <View style={[styles.settingChoices, styles.queue]}>
         {state?.listId && control('Episodes', () => showEpisodes({listId: state.listId, videoId: state.videoId, title: 'Current playlist'}), false)}
         {control('Previous', () => command({type: 'previous'}), !state?.hasPrevious)}
@@ -235,7 +255,7 @@ function RemoteScreen({session, onDisconnect}) {
       <View style={styles.settingRow}>
         <View style={styles.settingGroup}>
           {control('Speed', () => setting('speed'), !state?.ready)}
-          {control('Quality', () => setting('quality'), !state?.ready)}
+          {control('Quality', () => setting('quality'), !state?.ready || (!!track && unavailableQuality === track))}
         </View>
         <View style={styles.settingGroup}>
           <Text style={styles.volumeLabel}>Volume{'\n'}{volume === null ? '—' : volume + '%'}</Text>
@@ -243,7 +263,7 @@ function RemoteScreen({session, onDisconnect}) {
           {control('+', () => command({type: 'volume', level: Math.min(100, volume + 5) / 100}), volume === null || volume === 100, 'Raise YouTube volume')}
         </View>
       </View>
-      {state?.ready && settings && settings.videoId === state.videoId && <View style={styles.settingChoices}>
+      {state?.ready && settings?.options && settings.videoId === state.videoId && <View style={styles.settingChoices}>
         {settings.options.map(value => control(settings.type === 'speed' ? value + '×' : value,
           () => setting(settings.type, value), false, value, settings.current === value))}
       </View>}

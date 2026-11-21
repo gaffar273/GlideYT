@@ -19,6 +19,8 @@ After pairing, the phone remembers the laptop. Closing the Windows window frees 
 
 With version 0.1.2 on both devices, pairing the same phone again updates its entry. Open the updated Android app once to identify an existing pairing by phone model. Windows groups older, unidentified entries under **Earlier pairings**, where you can remove them by pairing date.
 
+Use **Repeat 1** to loop the current track and **Shuffle** to change playlist order when the laptop player supports it. **Sleep timer** pauses the laptop after 15, 30 or 60 minutes, even with the phone screen off. Choose **Off** to cancel. Keep the Windows companion running until the timer ends.
+
 Development builds use Node 22.11+ and npm workspaces. Windows opens YouTube in your default browser and uses its system media session for playback. Start a video once if the browser has not yet exposed its controls. Diagnostics and local credentials are in the private `.local` directory. The Windows executable can be rebuilt with `apps/windows/build.ps1`.
 
 ### Background controls

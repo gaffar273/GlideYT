@@ -13,6 +13,7 @@ export class ProfileBrowser {
     this.queue = Promise.resolve();
     this.titles = new Map();
     this.selected = {};
+    this.sleepUntil = 0;
   }
   request(command) {
     const operation = this.queue.then(() => this.send(command));
@@ -65,15 +66,32 @@ export class ProfileBrowser {
   }
   async state() {
     if (this.background?.socket.connected) {
-      try { return await this.inBackground({type:'state'}); }
+      try { return {...await this.inBackground({type:'state'}), sleepUntil: this.sleepUntil}; }
       catch { /* Native media state remains available while YouTube navigates. */ }
     }
-    try { return await this.request({type: 'state'}); }
+    try { return {...await this.request({type: 'state'}), sleepUntil: this.sleepUntil}; }
     catch (error) { return {connected: false, error: error.message}; }
   }
   async open() { return this.request({type: 'open'}); }
   async command(input) {
     const value = core.validateCommand(input);
+    if (value.type === 'sleep') {
+      clearTimeout(this.sleepTimer);
+      this.sleepUntil = value.minutes ? Date.now() + value.minutes * 60000 : 0;
+      if (value.minutes) {
+        this.sleepTimer = setTimeout(() => {
+          this.sleepUntil = 0;
+          this.playbackCommand({type:'pause'}).catch(error => console.error('Sleep timer could not pause playback:', error.message));
+        }, value.minutes * 60000);
+        this.sleepTimer.unref();
+      }
+      return {ok:true, state:await this.state()};
+    }
+    const result = await this.playbackCommand(value);
+    if (result.state) return {...result, state: {...result.state, sleepUntil: this.sleepUntil}};
+    return result;
+  }
+  async playbackCommand(value) {
     if (this.background?.socket.connected) return this.inBackground(value);
     if (value.type === 'quality' || value.type === 'speed') return this.request(value);
     if (['saved', 'suggested', 'next', 'previous', 'playlist', 'episodes', 'moreEpisodes'].includes(value.type)) return this.request(value);
@@ -99,5 +117,5 @@ export class ProfileBrowser {
     while (this.titles.size > 200) this.titles.delete(this.titles.keys().next().value);
     return result;
   }
-  close() { this.background?.close(); this.child?.stdin.end(); }
+  close() { clearTimeout(this.sleepTimer); this.background?.close(); this.child?.stdin.end(); }
 }

@@ -32,12 +32,13 @@ static partial class YouTubeTab {
         return pinnedWindow.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, type))
             .Cast<AutomationElement>().FirstOrDefault(match);
     }
-    static AutomationElement WaitControl(ControlType type, Func<AutomationElement,bool> match) {
+    static AutomationElement WaitControl(ControlType type, Func<AutomationElement,bool> match, bool optional = false) {
         for (int i=0; i<15; i++) {
             var element = FindPlayerControl(type,match);
             if (element != null) return element;
             Thread.Sleep(40);
         }
+        if (optional) return null;
         throw new Exception("This option is unavailable in the current YouTube player.");
     }
     static ExpandCollapsePattern Expandable(AutomationElement e) {
@@ -50,7 +51,10 @@ static partial class YouTubeTab {
     }
     public static object Settings(string type, string option) {
         RequireVisiblePlayer();
-        var button = WaitControl(ControlType.Button, e => e.Current.ClassName.Contains("ytp-settings-button"));
+        bool quality = type == "quality";
+        var unavailable = new {options=new string[0]};
+        var button = WaitControl(ControlType.Button, e => e.Current.ClassName.Contains("ytp-settings-button"), quality);
+        if (button == null) return unavailable;
         var menu = Expandable(button);
         try {
             if (menu.Current.ExpandCollapseState == ExpandCollapseState.Expanded) {
@@ -59,7 +63,8 @@ static partial class YouTubeTab {
             menu.Expand();
             string label = type == "quality" ? "Quality" : "Playback speed";
             var item = WaitControl(ControlType.MenuItem, e => e.Current.ClassName.Contains("ytp-menuitem") &&
-                e.Current.Name.StartsWith(label, StringComparison.OrdinalIgnoreCase));
+                e.Current.Name.StartsWith(label, StringComparison.OrdinalIgnoreCase), quality);
+            if (item == null) return unavailable;
             Expandable(item).Expand();
             if (type == "speed") {
                 var slider = WaitControl(ControlType.Slider,e => e.Current.ClassName.Contains("ytp-speedslider"));
@@ -77,7 +82,7 @@ static partial class YouTubeTab {
                 }
                 return new {options=choices,current=range.Current.Value.ToString("0.##",CultureInfo.InvariantCulture)};
             }
-            WaitControl(ControlType.RadioButton,e => e.Current.ClassName.Contains("ytp-menuitem") && (option == null ? QualityName(e) != "" : QualityName(e) == option));
+            if (WaitControl(ControlType.RadioButton,e => e.Current.ClassName.Contains("ytp-menuitem") && (option == null ? QualityName(e) != "" : QualityName(e) == option), true) == null) return unavailable;
             Thread.Sleep(160);
             var rows = pinnedWindow.FindAll(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.RadioButton))
                 .Cast<AutomationElement>().Where(e => e.Current.ClassName.Contains("ytp-menuitem") && QualityName(e) != "").ToArray();
@@ -86,7 +91,7 @@ static partial class YouTubeTab {
             string current = selected == null ? null : QualityName(selected);
             if (option != null) {
                 var row = rows.FirstOrDefault(e => QualityName(e) == option);
-                if (row == null) throw new Exception("That resolution is unavailable for this video.");
+                if (row == null) return unavailable;
                 ((InvokePattern)row.GetCurrentPattern(InvokePattern.Pattern)).Invoke();
                 current = option;
             }

@@ -14,6 +14,7 @@ class MediaControl {
         public int index { get; set; }
         public string listId { get; set; }
         public string option { get; set; }
+        public bool enabled { get; set; }
         public double level { get; set; }
         public double seconds { get; set; }
         public string title { get; set; }
@@ -68,6 +69,7 @@ class MediaControl {
         if (manager == null) manager = Result(GlobalSystemMediaTransportControlsSessionManager.RequestAsync());
         var tab = YouTubeTab.ReadPlayer();
         if (request.type == "speed" || request.type == "quality") {
+            if (tab == null && request.type == "quality") return new {options=new string[0]};
             if (tab == null) throw new Exception("Show the YouTube tab on your laptop to change this setting.");
             return YouTubeTab.Settings(request.type, request.option);
         }
@@ -96,6 +98,12 @@ class MediaControl {
             lastTitle = title; lastSource = session.SourceAppUserModelId;
             bool ok = true;
             switch(request.type) {
+                case "repeat":
+                    ok = session.GetPlaybackInfo().Controls.IsRepeatEnabled && Result(session.TryChangeAutoRepeatModeAsync(request.enabled ? Windows.Media.MediaPlaybackAutoRepeatMode.Track : Windows.Media.MediaPlaybackAutoRepeatMode.None));
+                    break;
+                case "shuffle":
+                    ok = session.GetPlaybackInfo().Controls.IsShuffleEnabled && Result(session.TryChangeShuffleActiveAsync(request.enabled));
+                    break;
                 case "next": case "previous": {
                     bool next = request.type == "next";
                     var controls = session.GetPlaybackInfo().Controls;
@@ -120,6 +128,8 @@ class MediaControl {
             string id = tab != null ? tab.Id : YouTubeTab.TitleKey(request.title) == YouTubeTab.TitleKey(title) ? request.videoId : null;
             return new {connected=true,ready=true,title=title,videoId=id ?? "windows-session",playing=playing, volume=tab != null && tab.Volume != null ? (double?)(tab.Volume.Current.Value / 100) : null,
                 listId=tab == null ? null : tab.ListId, hasNext=playback.Controls.IsNextEnabled || (tab != null && tab.HasNext), hasPrevious=playback.Controls.IsPreviousEnabled || (tab != null && tab.HasPrevious),
+                repeat=playback.Controls.IsRepeatEnabled && playback.Controls.IsPlaybackPositionEnabled && playback.AutoRepeatMode.HasValue ? (bool?)(playback.AutoRepeatMode == Windows.Media.MediaPlaybackAutoRepeatMode.Track) : null,
+                shuffle=playback.Controls.IsShuffleEnabled ? playback.IsShuffleActive : null,
                 live=!playback.Controls.IsPlaybackPositionEnabled, position=Math.Max(0,Math.Min(position,duration)),duration=duration,
                 thumbnail=id == null ? null : "https://i.ytimg.com/vi/"+id+"/mqdefault.jpg"};
         }

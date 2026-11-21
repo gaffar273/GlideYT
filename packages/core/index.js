@@ -2,11 +2,18 @@
 
 const API_VERSION = 1;
 const VIDEO_ID = /^[a-zA-Z0-9_-]{11}$/;
-const COMMANDS = new Set(['play', 'pause', 'seek', 'select', 'volume', 'speed', 'quality', 'saved', 'suggested', 'playlist', 'episodes', 'moreEpisodes', 'next', 'previous']);
+const COMMANDS = new Set(['play', 'pause', 'seek', 'select', 'volume', 'speed', 'quality', 'saved', 'suggested', 'playlist', 'episodes', 'moreEpisodes', 'next', 'previous', 'repeat', 'shuffle', 'sleep']);
 
 function validateCommand(value) {
   if (!value || !COMMANDS.has(value.type)) throw new Error('Unknown command.');
   switch (value.type) {
+    case 'repeat':
+    case 'shuffle':
+      if (typeof value.enabled !== 'boolean') throw new Error('Choose on or off.');
+      return {type: value.type, enabled: value.enabled};
+    case 'sleep':
+      if (![0, 15, 30, 60].includes(value.minutes)) throw new Error('Unsupported sleep timer.');
+      return {type: 'sleep', minutes: value.minutes};
     case 'episodes':
     case 'moreEpisodes':
     case 'playlist':

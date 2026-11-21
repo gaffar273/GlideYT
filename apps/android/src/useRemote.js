@@ -53,6 +53,7 @@ export function useRemote(session, onRevoked) {
     }
     catch (failure) {
       if (failure.status === 401) onRevoked();
+      else if (value.type === 'quality' && /quality options|quality settings are unavailable|resolution is unavailable|option is unavailable in the current YouTube player|show the YouTube tab on your laptop to change this setting/i.test(failure.message)) return {options: []};
       else setError(failure.name === 'AbortError' ? 'The laptop took too long to respond.' : failure.message);
     } finally { sending.current = false; revision.current++; setBusy(false); }
   }, [client, onRevoked]);
