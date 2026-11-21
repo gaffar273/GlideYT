@@ -1,0 +1,24 @@
+{
+  "name": "@lan-tube/android",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "react-native start",
+    "android": "react-native run-android",
+    "bundle": "node ../../scripts/prepare-bundle.mjs && react-native bundle --platform android --dev false --entry-file index.js --bundle-output ../../.local/android/index.android.bundle --assets-dest ../../.local/android/assets"
+  },
+  "dependencies": {
+    "@lan-tube/core": "0.1.0",
+    "react": "19.2.3",
+    "react-native": "0.84.1",
+    "react-native-safe-area-context": "5.5.2"
+  },
+  "devDependencies": {
+    "@babel/core": "7.25.2",
+    "@babel/runtime": "7.25.0",
+    "@react-native-community/cli": "20.1.0",
+    "@react-native-community/cli-platform-android": "20.1.0",
+    "@react-native/babel-preset": "0.84.1",
+    "@react-native/metro-config": "0.84.1"
+  }
+}

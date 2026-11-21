@@ -1,0 +1,55 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ WindowStyle="None" AllowsTransparency="True" Title="Glide YT" Width="456" Height="700" MinWidth="380" MinHeight="470" WindowStartupLocation="CenterScreen" FontFamily="Segoe UI" Foreground="#211E20" Background="Transparent">
+ <WindowChrome.WindowChrome><WindowChrome CornerRadius="0" CaptionHeight="34" ResizeBorderThickness="5" GlassFrameThickness="0" UseAeroCaptionButtons="False"/></WindowChrome.WindowChrome>
+ <Window.Resources>
+  <Style TargetType="Button">
+   <Setter Property="Padding" Value="16,10"/><Setter Property="Margin" Value="0,4,6,4"/><Setter Property="Background" Value="#E7F1E9"/><Setter Property="Foreground" Value="#174B38"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Cursor" Value="Hand"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+   <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Opacity" Value="0.84"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter TargetName="Surface" Property="Opacity" Value="0.5"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="Card" TargetType="Border"><Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="#E7E1E2"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="18"/><Setter Property="Padding" Value="18"/><Setter Property="Margin" Value="0,0,0,12"/></Style>
+ </Window.Resources>
+ <Border BorderBrush="#ADADAD" Background="#FAF8F7" BorderThickness="1" CornerRadius="9" UseLayoutRounding="True">
+ <DockPanel>
+  <DockPanel DockPanel.Dock="Top" Height="34" LastChildFill="True">
+   <Button x:Name="CloseWindow" DockPanel.Dock="Right" WindowChrome.IsHitTestVisibleInChrome="True" Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" Width="44" Margin="0" Padding="0" Background="Transparent" ToolTip="Close" AutomationProperties.Name="Close"/>
+   <Button x:Name="MinimizeWindow" DockPanel.Dock="Right" WindowChrome.IsHitTestVisibleInChrome="True" Content="&#xE921;" FontFamily="Segoe MDL2 Assets" Width="44" Margin="0" Padding="0" Background="Transparent" ToolTip="Minimize" AutomationProperties.Name="Minimize"/>
+   <TextBlock Text="Glide YT" Margin="12,0" VerticalAlignment="Center"/>
+  </DockPanel>
+ <Grid Margin="24,18">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <DockPanel Margin="0,0,0,16">
+   <Button x:Name="Settings" DockPanel.Dock="Right" Content="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="17" Padding="10" ToolTip="Devices and settings" AutomationProperties.Name="Devices and settings"/>
+   <StackPanel Orientation="Horizontal"><Border Background="#1ED760" Width="34" Height="34" CornerRadius="12"><Path Data="M77,32 A34,34 0 1,0 88,54 L54,54 L54,64 L75,64 A23,23 0 1,1 69,40 Z" Width="22" Height="22" Stretch="Uniform" Fill="#101B14" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="Glide YT" FontWeight="SemiBold" FontSize="23" Margin="10,0,0,0" VerticalAlignment="Center"/></StackPanel>
+  </DockPanel>
+  <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+   <Grid><StackPanel x:Name="Home">
+    <Border Style="{StaticResource Card}" Background="#163E34" TextElement.Foreground="White" BorderThickness="0"><StackPanel>
+     <DockPanel><TextBlock x:Name="Status" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="#A9E1C1"/><TextBlock Text="YouTube" FontSize="21" FontWeight="SemiBold"/></DockPanel>
+     <TextBlock x:Name="Playing" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" MaxHeight="40" Margin="0,6,0,10" Foreground="#E1EEE7"/>
+     <Button x:Name="Open" Content="&#x25B6;   Open YouTube" HorizontalAlignment="Left" Background="#CD1835" Foreground="White"/>
+    </StackPanel></Border>
+    <Border Style="{StaticResource Card}"><StackPanel HorizontalAlignment="Center">
+     <TextBlock x:Name="PairHeading" FontSize="23" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+     <TextBlock x:Name="Hint" TextWrapping="Wrap" TextAlignment="Center" Margin="0,5,0,10" Foreground="#635C60"/>
+     <Image x:Name="QR" Width="160" Height="160" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" AutomationProperties.Name="Phone QR code"/>
+     <TextBlock x:Name="Code" HorizontalAlignment="Center" FontSize="23" FontFamily="Consolas" FontWeight="Bold"/>
+     <Button x:Name="SwitchMode" Background="#236047" Foreground="White" HorizontalAlignment="Center" Margin="0,10,0,0"/>
+    </StackPanel></Border>
+   </StackPanel>
+   <StackPanel x:Name="SettingsPage" Visibility="Collapsed">
+    <TextBlock Text="Devices and settings" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,16"/>
+    <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Background controls" FontSize="17" FontWeight="SemiBold"/>
+     <TextBox IsReadOnly="True" BorderThickness="0" Background="Transparent" Text="Copy the address for your Windows default browser, open it there, and enable remote debugging. Then connect below." TextWrapping="Wrap" Margin="0,6"/>
+     <DockPanel><Button x:Name="CopyEdge" DockPanel.Dock="Right" Content="Copy" AutomationProperties.Name="Copy Edge address"/>
+      <TextBox x:Name="EdgeAddress" Text="edge://inspect/#remote-debugging" AutomationProperties.Name="Edge setup address" IsReadOnly="True" BorderThickness="0" Background="Transparent" VerticalAlignment="Center" TextWrapping="Wrap"/></DockPanel>
+     <DockPanel><Button x:Name="CopyChrome" DockPanel.Dock="Right" Content="Copy" AutomationProperties.Name="Copy Chrome address"/>
+      <TextBox x:Name="ChromeAddress" Text="chrome://inspect/#remote-debugging" AutomationProperties.Name="Chrome setup address" IsReadOnly="True" BorderThickness="0" Background="Transparent" VerticalAlignment="Center" TextWrapping="Wrap"/></DockPanel>
+     <Button x:Name="Background" Content="Connect background controls"/></StackPanel></Border>
+    <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Paired phones" FontSize="17" FontWeight="SemiBold"/><StackPanel x:Name="Devices"/></StackPanel></Border>
+    <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Laptop address" FontSize="17" FontWeight="SemiBold"/><TextBox x:Name="Address" IsReadOnly="True" BorderThickness="0" Margin="0,6" Background="Transparent"/>
+     <WrapPanel><Button x:Name="Wifi" Content="Allow Wi-Fi access"/><Button x:Name="Stop" Content="Stop companion"/></WrapPanel></StackPanel></Border>
+   </StackPanel></Grid>
+  </ScrollViewer>
+  <TextBlock Grid.Row="2" x:Name="Notice" TextWrapping="Wrap" Foreground="#8C3735"/>
+ </Grid></DockPanel></Border></Window>

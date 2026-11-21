@@ -1,0 +1,49 @@
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+
+react {
+    reactNativeDir = file("../../../../node_modules/react-native")
+    codegenDir = file("../../../../node_modules/@react-native/codegen")
+    cliFile = file("../../../../node_modules/react-native/cli.js")
+    // npm workspaces hoist Hermes beside React Native, outside this Android package's root.
+    def hermesExecutable = System.getProperty("os.name").toLowerCase().contains("windows") ? "hermesc.exe" : "hermesc"
+    hermesCommand = file("../../../../node_modules/hermes-compiler/hermesc/%OS-BIN%/" + hermesExecutable).absolutePath
+    autolinkLibrariesWithApp()
+}
+android {
+    ndkVersion rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
+    namespace "com.lantube"
+    defaultConfig {
+        applicationId "com.lantube"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 12
+        versionName "0.1.0"
+    }
+    signingConfigs {
+        if (System.getenv("GLIDEYT_KEYSTORE")) {
+            distribution {
+                storeFile file(System.getenv("GLIDEYT_KEYSTORE"))
+                storePassword System.getenv("GLIDEYT_SIGNING_PASSWORD")
+                keyAlias "glideyt"
+                keyPassword System.getenv("GLIDEYT_SIGNING_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig System.getenv("GLIDEYT_KEYSTORE") ? signingConfigs.distribution : signingConfigs.debug
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+}
+dependencies {
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    implementation("com.facebook.react:react-android")
+    implementation("com.facebook.react:hermes-android")
+}

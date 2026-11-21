@@ -1,0 +1,2 @@
+-keep class com.lantube.SecureSessionModule { *; }
+-keep class com.lantube.SecureSessionPackage { *; }

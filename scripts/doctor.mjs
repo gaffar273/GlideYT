@@ -1,0 +1,16 @@
+import {existsSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {buildEnvironment} from './lib/build-environment.mjs';
+const {javaHome, sdk} = await buildEnvironment(fileURLToPath(new URL('../', import.meta.url)));
+console.log('Glide YT prerequisites\n');
+console.log('Node: ' + process.version + ' (requires >=22.11; LTS recommended)');
+const java = javaHome ? join(javaHome, 'bin/java.exe') : 'java';
+const result = spawnSync(java, ['-version'], {encoding: 'utf8'});
+console.log('Java: ' + (result.status === 0 ? (result.stderr || result.stdout).split('\n')[0] : 'MISSING — install JDK 17 and set JAVA_HOME'));
+console.log('Android SDK: ' + (sdk && existsSync(sdk) ? sdk : 'MISSING — install Android Studio / SDK 36 and set ANDROID_HOME'));
+console.log('Android dependencies: ' + (existsSync(new URL('../node_modules/react-native', import.meta.url)) ? 'installed' : 'MISSING — run npm.cmd install'));
+const browsers = [process.env.LAN_TUBE_BROWSER, 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].filter(Boolean);
+console.log('Browser: ' + (browsers.find(existsSync) || 'MISSING — install Chrome or Edge'));
+console.log('\nThe companion and Node tests run without npm install. Android needs Java, the SDK, and npm dependencies.');
