@@ -11,7 +11,7 @@ Run **GlideYT-Setup.exe** on a 64-bit Windows PC and open **GlideYT** from Start
 ## Get started
 
 1. Open **GlideYT** from Start. If you are running the source checkout, install Node.js 22.11 or later and use **Start-GlideYT.cmd**.
-2. Choose **Install Android app** and scan the QR code with the phone camera. Install the APK. You can also transfer `dist/android/glide-yt-0.1.0.apk` by USB. The APK supports arm64 phones running Android 7 or later.
+2. Choose **Install Android app** and scan the QR code with the phone camera. Install the APK. You can also transfer `dist/android/glide-yt-0.1.3.apk` by USB. The APK supports arm64 phones running Android 7 or later.
 3. Choose **Show pairing code** on Windows. Tap **Scan QR code** inside the Android app and point it at the laptop. For manual pairing, find the address under the gear icon in Windows. Both devices must use the same trusted Wi-Fi.
 4. Choose **Open YouTube** on Windows. Search on the phone and tap a video to play it on the laptop. The remote shows artwork, title, playback time, play/pause, and ten-second skips.
 
@@ -25,11 +25,11 @@ Development builds use Node 22.11+ and npm workspaces. Windows opens YouTube in 
 
 ### Background controls
 
-Play, pause and seek use Windows media sessions while another window or tab is active. For playlist navigation, quality, speed and volume in a hidden YouTube tab, enable remote debugging in the default browser's inspect page. In Glide YT on Windows, choose the gear and **Connect background controls**, then approve the browser prompt. The companion attaches to the existing YouTube tab. Repeat Connect after restarting the browser or companion. Phone commands never initiate a debugging connection.
+Play, pause and seek use Windows media sessions while another window or tab is active. For playlist navigation, quality, speed and volume in a hidden YouTube tab, enable remote debugging in the default browser's inspect page. In Glide YT on Windows, choose the gear and **Connect background controls**, then approve the browser prompt. Glide YT remembers that tab across song changes and tries to reconnect to it after a companion restart or connection loss. Your browser may ask for approval again. If you close the saved tab, select **Connect background controls** on the laptop to choose its replacement.
 
 ## Build the Android app
 
-On Windows, the automated path is **Setup-Android.cmd**, followed by **Build-Android.cmd**, run from a normal terminal with internet access. Setup downloads a checksum-verified portable JDK 17 and SDK command-line tools into `.local/toolchain`, then lets you review Google's SDK/package licenses interactively. It does not alter global environment variables or require Android Studio. The SDK manager version is pinned to 19.0 for JDK 17 compatibility; SDK platform/build tools remain version 36. Building installs npm dependencies, runs checks, builds a standalone personal-use APK, and copies it to `dist/android/glide-yt-0.1.0.apk` with a SHA-256 build report. A failed build never creates a successful build report. Initial SDK/NDK/Gradle downloads can consume several GB of disk space; these tools are only for building, not required for running the companion.
+On Windows, the automated path is **Setup-Android.cmd**, followed by **Build-Android.cmd**, run from a normal terminal with internet access. Setup downloads a checksum-verified portable JDK 17 and SDK command-line tools into `.local/toolchain`, then lets you review Google's SDK/package licenses interactively. It does not alter global environment variables or require Android Studio. The SDK manager version is pinned to 19.0 for JDK 17 compatibility; SDK platform/build tools remain version 36. Building installs npm dependencies, runs checks, builds a standalone personal-use APK, and copies it to `dist/android/glide-yt-0.1.3.apk` with a SHA-256 build report. A failed build never creates a successful build report. Initial SDK/NDK/Gradle downloads can consume several GB of disk space; these tools are only for building, not required for running the companion.
 
 The setup script reuses a complete existing SDK when available. SDK license terms are provided by [Google](https://developer.android.com/studio#terms-and-conditions); portable JDK releases/checksums come from [Adoptium](https://adoptium.net/installation/archives).
 

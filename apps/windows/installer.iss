@@ -28,6 +28,7 @@ Source: "{#SourceDir}\apps\windows\MediaControl.exe"; DestDir: "{app}\apps\windo
 Source: "{#SourceDir}\apps\windows\qr.cjs"; DestDir: "{app}\apps\windows"; Flags: ignoreversion
 Source: "{#SourceDir}\packages\core\*"; DestDir: "{app}\packages\core"; Flags: ignoreversion recursesubdirs
 Source: "{#SourceDir}\dist\android\*.apk"; DestDir: "{app}\dist\android"; Flags: ignoreversion
+Source: "{#SourceDir}\dist\android\build-report.json"; DestDir: "{app}\dist\android"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\GlideYT"; Filename: "{app}\GlideYT.exe"; WorkingDir: "{app}"

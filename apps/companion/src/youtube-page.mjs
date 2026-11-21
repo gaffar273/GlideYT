@@ -4,13 +4,18 @@ export function readState() {
   if (url.hostname !== 'www.youtube.com') return {connected: false, error: 'Return to YouTube on the laptop after finishing sign-in or consent.'};
   const video = document.querySelector('video.html5-main-video') || document.querySelector('video');
   const videoId = url.searchParams.get('v');
+  const player = document.getElementById?.('movie_player');
+  // YouTube can normalize the media element's gain independently of its volume slider.
+  const percent = player?.getVolume?.();
+  const volume = video && Number.isFinite(percent) && percent >= 0 && percent <= 100
+    ? (player.isMuted?.() ? 0 : percent / 100) : null;
   const title = document.querySelector('ytd-watch-metadata h1 yt-formatted-string')?.textContent?.trim() || document.title.replace(/ - YouTube$/, '');
   return {
     connected: true, videoId, title, playing: Boolean(video && !video.paused && !video.ended),
     position: video && Number.isFinite(video.currentTime) ? video.currentTime : 0,
     duration: video && Number.isFinite(video.duration) ? video.duration : 0,
     repeat: video && videoId && Number.isFinite(video.duration) && video.duration > 0 ? Boolean(video.loop) : null,
-    live: Boolean(video && video.duration === Infinity), volume: video?.volume ?? 1,
+    live: Boolean(video && video.duration === Infinity), volume,
     ready: Boolean(video && video.readyState > 0), observedAt: Date.now(),
     thumbnail: /^[a-zA-Z0-9_-]{11}$/.test(videoId || '') ? 'https://i.ytimg.com/vi/' + videoId + '/mqdefault.jpg' : null,
   };
@@ -37,7 +42,13 @@ export async function controlPlayer(command) {
     case 'seek':
       if (!Number.isFinite(video.duration)) return {ok: false, error: 'Seeking is not available for this live stream.'};
       video.currentTime = Math.min(command.seconds, video.duration); break;
-    case 'volume': video.volume = command.level; video.muted = command.level === 0; break;
+    case 'volume': {
+      const player = document.getElementById?.('movie_player');
+      if (typeof player?.setVolume !== 'function') return {ok: false, error: 'YouTube volume is unavailable.'};
+      player.setVolume(Math.round(command.level * 100));
+      if (command.level > 0 && player.isMuted?.()) player.unMute();
+      break;
+    }
   }
   return {ok: true};
 }

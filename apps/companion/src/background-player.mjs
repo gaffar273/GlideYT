@@ -108,7 +108,7 @@ async function pageAction(cmd, read, control) {
 
 export class BackgroundPlayer {
   constructor(socket, sessionId, targetId) { this.socket=socket; this.sessionId=sessionId; this.targetId=targetId; }
-  static async connect(browser, title, portFile) {
+  static async connect(browser, title, portFile, savedTargetId) {
     const directory = browser==='msedge' ? 'Microsoft/Edge' : browser==='chrome' ? 'Google/Chrome' : null;
     if (!directory) throw new AppError('Choose Edge or Chrome as the default browser.');
     let port, path;
@@ -120,7 +120,8 @@ export class BackgroundPlayer {
       const {targetInfos}=await socket.send('Target.getTargets');
       const tabs=targetInfos.filter(t=>t.type==='page' && t.url.startsWith('https://www.youtube.com/'));
       const matches=tabs.filter(t=>normalTitle(t.title.replace(/ - YouTube$/,''))===normalTitle(title));
-      const tab=matches.length===1 ? matches[0] : tabs.length===1 ? tabs[0] : null;
+      const tab=savedTargetId ? tabs.find(t=>t.targetId===savedTargetId)
+        : matches.length===1 ? matches[0] : tabs.length===1 ? tabs[0] : null;
       if (!tab) throw new AppError('Play the intended YouTube video, then connect again so Glide YT can identify its tab.');
       const {sessionId}=await socket.send('Target.attachToTarget',{targetId:tab.targetId,flatten:true});
       return new BackgroundPlayer(socket,sessionId,tab.targetId);
@@ -163,5 +164,6 @@ export class BackgroundPlayer {
     }
     return cmd.type==='saved' ? {playlists:items} : {episodes:items,hasMore:cmd.type==='moreEpisodes' ? items.length>first.items.length : items.length>=20};
   }
+  onDisconnect(callback) { this.socket.socket.addEventListener('close', callback, {once:true}); }
   close() { this.socket.close(); }
 }

@@ -1,5 +1,6 @@
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
+import {readFile, rename, writeFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {BackgroundPlayer} from './background-player.mjs';
 import {AppError} from './errors.mjs';
@@ -9,7 +10,9 @@ import core from '../../../packages/core/index.js';
 const executable = fileURLToPath(new URL('../../windows/MediaControl.exe', import.meta.url));
 
 export class ProfileBrowser {
-  constructor() {
+  constructor(backgroundFile, connect = BackgroundPlayer.connect) {
+    this.backgroundFile = backgroundFile;
+    this.connect = connect;
     this.queue = Promise.resolve();
     this.titles = new Map();
     this.selected = {};
@@ -51,13 +54,56 @@ export class ProfileBrowser {
       child.stdin.write(JSON.stringify({...this.selected, ...command}) + '\n');
     });
   }
+  async loadBackground() {
+    try {
+      const saved = JSON.parse(await readFile(this.backgroundFile, 'utf8'));
+      if (['msedge', 'chrome'].includes(saved.browser) && typeof saved.targetId === 'string' && saved.targetId) {
+        this.savedBackground = saved;
+        this.restoreBackground();
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') console.error('Could not read saved background controls.');
+    }
+  }
+  restoreBackground() {
+    if (!this.closed && this.savedBackground && !this.background?.socket.connected) {
+      this.connectBackground(this.savedBackground).catch(() => {});
+    }
+  }
   async enableBackground() {
-    const browser = await this.request({type:'browser'});
-    const state = await this.request({type:'state'});
-    const player = await BackgroundPlayer.connect(browser, state.title);
-    this.background?.close();
-    this.background = player;
-    return {ok:true};
+    if (this.connecting) {
+      try { return await this.connecting; } catch { /* A local click can select a replacement tab. */ }
+    }
+    return this.connectBackground();
+  }
+  connectBackground(saved) {
+    if (!this.connecting) {
+      this.connecting = this.attachBackground(saved).finally(() => { this.connecting = null; });
+    }
+    return this.connecting;
+  }
+  async attachBackground(saved) {
+    const browser = saved?.browser ?? await this.request({type:'browser'});
+    const title = saved ? undefined : (await this.request({type:'state'})).title;
+    const player = await this.connect(browser, title, undefined, saved?.targetId);
+    try {
+      if (!saved) {
+        const preference = {browser, targetId:player.targetId};
+        await writeFile(this.backgroundFile + '.tmp', JSON.stringify(preference), {mode:0o600});
+        await rename(this.backgroundFile + '.tmp', this.backgroundFile);
+        this.savedBackground = preference;
+      }
+      if (this.closed) throw new AppError('The companion is closing.');
+      const previous = this.background;
+      this.background = player;
+      previous?.close();
+      player.onDisconnect(() => {
+        if (this.background !== player || this.closed) return;
+        this.background = null;
+        this.restoreBackground();
+      });
+      return {ok:true};
+    } catch (error) { player.close(); throw error; }
   }
   async inBackground(value) {
     const operation = this.queue.then(() => this.background.command(value));
@@ -72,7 +118,11 @@ export class ProfileBrowser {
     try { return {...await this.request({type: 'state'}), sleepUntil: this.sleepUntil}; }
     catch (error) { return {connected: false, error: error.message}; }
   }
-  async open() { return this.request({type: 'open'}); }
+  async open() {
+    const result = await this.request({type: 'open'});
+    this.restoreBackground();
+    return result;
+  }
   async command(input) {
     const value = core.validateCommand(input);
     if (value.type === 'sleep') {
@@ -96,7 +146,12 @@ export class ProfileBrowser {
     if (value.type === 'quality' || value.type === 'speed') return this.request(value);
     if (['saved', 'suggested', 'next', 'previous', 'playlist', 'episodes', 'moreEpisodes'].includes(value.type)) return this.request(value);
     if (value.type === 'select') {
-      await this.request(value);
+      try { await this.request(value); } catch (error) {
+        if (this.connecting && /hidden YouTube tab/.test(error.message)) {
+          throw new AppError('Reconnecting to your YouTube tab. Check the laptop for a browser prompt, then select the song again.');
+        }
+        throw error;
+      }
       this.selected = {videoId: value.videoId, title: this.titles.get(value.videoId)};
       return {ok: true, loading: true};
     }
@@ -117,5 +172,5 @@ export class ProfileBrowser {
     while (this.titles.size > 200) this.titles.delete(this.titles.keys().next().value);
     return result;
   }
-  close() { clearTimeout(this.sleepTimer); this.background?.close(); this.child?.stdin.end(); }
+  close() { this.closed = true; clearTimeout(this.sleepTimer); this.background?.close(); this.child?.stdin.end(); }
 }

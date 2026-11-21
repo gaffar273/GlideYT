@@ -30,10 +30,11 @@ try {
     'org.gradle.wrapper.GradleWrapperMain', '--no-daemon', '--console=plain', 'assembleRelease'], {cwd: android, env});
   const original = join(android, 'app/build/outputs/apk/release/app-release.apk');
   if ((await stat(original)).size < 1024) throw new Error('Gradle did not produce a valid-sized APK.');
-  const apk = join(output, 'glide-yt-0.1.0.apk');
+  const verification = verifyApk(original, {java, sdk, env});
+  const filename = `glide-yt-${verification.versionName}.apk`;
+  const apk = join(output, filename);
   await copyFile(original, apk);
-  const verification = verifyApk(apk, {java, sdk, env});
-  const report = {builtAt: new Date().toISOString(), apk: 'glide-yt-0.1.0.apk', sha256: await sha256(apk),
+  const report = {builtAt: new Date().toISOString(), apk: filename, sha256: await sha256(apk),
     build: 'assembleRelease', signing: env.GLIDEYT_KEYSTORE ? 'GlideYT distribution key' : 'local debug key for personal testing',
     verification, deviceTesting: 'pending'};
   await writeFile(join(output, 'build-report.json'), JSON.stringify(report, null, 2));

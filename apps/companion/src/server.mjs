@@ -1,6 +1,8 @@
 import {createServer} from 'node:http';
 import {readFile, stat} from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {randomBytes, timingSafeEqual} from 'node:crypto';
 import {hostname, networkInterfaces} from 'node:os';
 import {AppError} from './errors.mjs';
@@ -36,7 +38,7 @@ async function jsonBody(request) {
   } catch { throw new AppError('Send a JSON object.', 400); }
 }
 
-export function createCompanionServer({browser, pairing, port = 3210, laptopName = hostname(), adminSecret = randomBytes(32).toString('hex'), onShutdown = () => {}, apkPath = new URL('../../../dist/android/glide-yt-0.1.0.apk', import.meta.url)}) {
+export function createCompanionServer({browser, pairing, port = 3210, laptopName = hostname(), adminSecret = randomBytes(32).toString('hex'), onShutdown = () => {}, apkDirectory = fileURLToPath(new URL('../../../dist/android/', import.meta.url))}) {
   const limits = new Map(); let searchActive = false, wifiActive = false;
   const server = createServer(async (request, response) => {
     try {
@@ -56,10 +58,15 @@ export function createCompanionServer({browser, pairing, port = 3210, laptopName
         response.end(html); return;
       }
       if (path === '/download/android.apk' && request.method === 'GET') {
-        let apk;
-        try { apk = await stat(apkPath); } catch { throw new AppError('The Android APK has not been built yet.', 503); }
+        let filename, apkPath, apk;
+        try {
+          filename = JSON.parse(await readFile(join(apkDirectory, 'build-report.json'), 'utf8')).apk;
+          if (typeof filename !== 'string' || !/^glide-yt-[0-9][0-9A-Za-z._-]*\.apk$/.test(filename)) throw new Error('Invalid APK filename.');
+          apkPath = join(apkDirectory, filename);
+          apk = await stat(apkPath);
+        } catch { throw new AppError('The Android APK is unavailable.', 503); }
         response.writeHead(200, {'Content-Type': 'application/vnd.android.package-archive', 'Content-Length': apk.size,
-          'Content-Disposition': 'attachment; filename="glide-yt-0.1.0.apk"', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'});
+          'Content-Disposition': `attachment; filename="${filename}"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'});
         createReadStream(apkPath).on('error', () => response.destroy()).pipe(response); return;
       }
       if (path.startsWith('/admin/')) {

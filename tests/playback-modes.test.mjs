@@ -1,9 +1,47 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
+import {mkdtemp, readFile, rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {BackgroundPlayer} from '../apps/companion/src/background-player.mjs';
 import {ProfileBrowser} from '../apps/companion/src/profile-browser.mjs';
 import core from '../packages/core/index.js';
+
+test('background controls reuse a saved tab across songs, disconnects and companion restarts', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'glide-background-'));
+  t.after(() => rm(directory, {recursive:true, force:true}));
+  const file = join(directory, 'background-controls.json');
+  const targets = [], songs = [];
+  let disconnect, denied = false;
+  async function connect(browser, title, portFile, targetId) {
+    targets.push(targetId);
+    if (denied) throw new Error('Browser declined');
+    return {targetId:'tab-one', socket:{connected:true}, onDisconnect(fn) { disconnect = fn; }, close() {},
+      async command(song) { songs.push(song.videoId); return {ok:true}; }};
+  }
+  const first = new ProfileBrowser(file, connect);
+  first.request = async cmd => cmd.type === 'browser' ? 'msedge' : {title:'Song'};
+  await first.loadBackground();
+  assert.equal(targets.length, 0);
+  await first.enableBackground();
+  assert.deepEqual(JSON.parse(await readFile(file)), {browser:'msedge',targetId:'tab-one'});
+  for (const videoId of ['dQw4w9WgXcQ','abcdefghijk']) await first.command({type:'select',videoId});
+  assert.equal(songs.length, 2);
+  assert.equal(targets.length, 1);
+  disconnect();
+  await first.connecting;
+  first.close();
+  const restarted = new ProfileBrowser(file, connect);
+  await restarted.loadBackground();
+  await restarted.connecting;
+  assert.deepEqual(targets, [undefined,'tab-one','tab-one']);
+  denied = true;
+  disconnect();
+  await assert.rejects(restarted.connecting);
+  assert.equal(targets.length, 4);
+  restarted.close();
+});
 
 test('repeat and shuffle follow player state and an absent quality menu gives no choices', async () => {
   const location = new URL('https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLtest');

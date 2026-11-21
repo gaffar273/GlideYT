@@ -4,6 +4,24 @@ import {runInNewContext} from 'node:vm';
 import {parseSearchHtml, stateExpression, commandExpression, searchExpression} from '../apps/companion/src/youtube-page.mjs';
 
 const oldVideo = {videoRenderer: {videoId: 'dQw4w9WgXcQ', title: {runs: [{text: 'Title " } ; test'}]}, ownerText: {runs: [{text: 'Channel'}]}, lengthText: {simpleText: '3:33'}}};
+test('phone volume follows the YouTube control even when the video gain is normalized', async () => {
+  const video = {volume: 0.5414};
+  const player = {percent: 100, muted: false, getVolume() { return this.percent; },
+    setVolume(percent) { this.percent = percent; }, isMuted() { return this.muted; }, unMute() { this.muted = false; }};
+  const context = {URL, location: new URL('https://www.youtube.com/watch?v=dQw4w9WgXcQ'),
+    document: {title: 'Demo', getElementById: () => player, querySelector: selector => selector.startsWith('video') ? video : null}};
+  const state = () => runInNewContext(stateExpression, context);
+  const set = level => runInNewContext(commandExpression({type: 'volume', level}), context);
+  assert.equal(state().volume, 1);
+  player.muted = true;
+  assert.equal(state().volume, 0);
+  assert.equal((await set(0.95)).state.volume, 0.95);
+  assert.equal((await set(0)).state.volume, 0);
+  assert.equal(video.volume, 0.5414);
+  context.document.getElementById = () => null;
+  assert.equal(state().volume, null);
+  assert.equal((await set(1)).ok, false);
+});
 test('search parses quoted braces, deduplicates videos, and excludes promoted entries', () => {
   const data = {contents: {items: [oldVideo, oldVideo, {promotedVideoRenderer: oldVideo}, {videoRenderer: {videoId: 'invalid'}}]}};
   const result = parseSearchHtml('<script>var ytInitialData = ' + JSON.stringify(data) + ';</script>');

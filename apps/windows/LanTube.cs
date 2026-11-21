@@ -131,7 +131,7 @@ class LanTube {
         try {
             await Api(path, body);
             if (path == "stop") { window.Close(); return; }
-            if (path == "background") Say("Background controls connected.");
+            if (path == "background") Say("Background controls connected. This YouTube tab is saved.");
             if (path == "wifi") Say("Private Wi-Fi access enabled.");
             await Refresh();
         } catch (Exception ex) { Say(ex.Message); }

@@ -11,10 +11,12 @@ async function setup(t) {
   const directory = await mkdtemp(join(tmpdir(), 'lan-tube-http-'));
   assert.ok(directory.startsWith(join(tmpdir(), 'lan-tube-http-')));
   const pairing = await new PairingStore(join(directory, 'devices.json')).load();
-  const apkPath = join(directory, 'test.apk'); await writeFile(apkPath, 'test APK bytes');
+  const filename = 'glide-yt-1.2.3.apk';
+  await writeFile(join(directory, 'build-report.json'), JSON.stringify({apk: filename}));
+  await writeFile(join(directory, filename), 'test APK bytes');
   const commands = [];
   const browser = {state: async () => ({connected: true, title: 'Test video'}), command: async value => { commands.push(value); return {ok: true}; }, search: async () => ({ok: true, results: []}), open: async () => ({ok: true})};
-  const {server, adminSecret} = createCompanionServer({browser, pairing, apkPath});
+  const {server, adminSecret} = createCompanionServer({browser, pairing, apkDirectory: directory});
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await rm(directory, {recursive: true, force: true}); });
   return {url: 'http://127.0.0.1:' + server.address().port, pairing, commands, adminSecret};
@@ -37,6 +39,7 @@ test('phone installation serves only the fixed APK and never reveals the pairing
   assert.equal((await page.text()).includes(pairing.code), false);
   const apk = await fetch(url + '/download/android.apk');
   assert.equal(apk.headers.get('content-type'), 'application/vnd.android.package-archive');
+  assert.equal(apk.headers.get('content-disposition'), 'attachment; filename="glide-yt-1.2.3.apk"');
   assert.equal(await apk.text(), 'test APK bytes');
   assert.equal((await fetch(url + '/download/devices.json')).status, 401);
 });

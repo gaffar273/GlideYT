@@ -4,7 +4,7 @@
 
 ## Built artifact
 
-- `dist/android/glide-yt-0.1.0.apk`.
+- `dist/android/glide-yt-0.1.3.apk`.
 - `assembleRelease` completed successfully, including native Kotlin/C++, Android resource checks, R8 shrinking, and packaging.
 - APK signature verified with Android SDK `apksigner` (v2 signing, GlideYT distribution certificate for the public APK).
 - Application ID: `com.lantube`; Android API 24 minimum, API 36 target; arm64-v8a.

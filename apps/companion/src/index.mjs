@@ -13,7 +13,8 @@ if (!Number.isInteger(port) || port < 1024 || port > 65535) {
   throw new Error('Choose a port between 1024 and 65535.');
 }
 const pairing = await new PairingStore(join(dataDir, 'devices.json')).load();
-const browser = new ProfileBrowser();
+const browser = new ProfileBrowser(join(dataDir, 'background-controls.json'));
+await browser.loadBackground();
 const {server, adminSecret} = createCompanionServer({browser, pairing, port, onShutdown: stop});
 server.on('error', error => { console.error(`Companion could not listen on port ${port}: ${error.code}.`); process.exitCode = 1; });
 server.listen(port, '0.0.0.0', async () => {

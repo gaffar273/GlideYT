@@ -14,7 +14,7 @@ if (!$Compiler) {
 if (!$Compiler) { throw 'Install Inno Setup 6 or pass -Compiler with the path to ISCC.exe.' }
 
 $stage = Join-Path $root ('.local/installer-' + [guid]::NewGuid())
-$files = @('apps/windows', 'apps/companion', 'packages/core', 'scripts/launch-windows.mjs', 'scripts/stop-installed.mjs', "dist/android/$($report.apk)")
+$files = @('apps/windows', 'apps/companion', 'packages/core', 'scripts/launch-windows.mjs', 'scripts/stop-installed.mjs', 'dist/android/build-report.json', "dist/android/$($report.apk)")
 foreach ($file in $files) {
     $destination = Join-Path $stage $file
     New-Item -Force -ItemType Directory (Split-Path $destination) | Out-Null
