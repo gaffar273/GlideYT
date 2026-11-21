@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent">
+
+    <com.journeyapps.barcodescanner.DecoratedBarcodeView
+        android:id="@+id/pair_camera" android:layout_width="match_parent" android:layout_height="match_parent"
+        android:importantForAccessibility="noHideDescendants"
+        app:zxing_preview_scaling_strategy="centerCrop" app:zxing_scanner_layout="@layout/pair_viewfinder"
+        app:zxing_framing_rect_width="252dp" app:zxing_framing_rect_height="252dp" />
+
+    <LinearLayout android:id="@+id/scanner_controls" android:layout_width="match_parent"
+        android:layout_height="match_parent" android:orientation="vertical" android:padding="20dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical">
+            <ImageButton android:id="@+id/close_scanner" android:layout_width="48dp" android:layout_height="48dp"
+                android:background="@drawable/scanner_button" android:src="@drawable/ic_scanner_close"
+                android:contentDescription="@string/close_scanner" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginStart="14dp" android:text="@string/pair_scanner_title"
+                android:fontFamily="sans-serif-medium" android:textColor="#FFFFFF" android:textSize="22sp"/>
+        </LinearLayout>
+        <Space android:layout_width="1dp" android:layout_height="0dp" android:layout_weight="1" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:background="@drawable/scanner_hint" android:padding="16dp"
+            android:gravity="center" android:text="@string/pair_scanner_hint" android:textColor="#F0FAF3"
+            android:textSize="16sp" android:lineSpacingExtra="3dp" />
+    </LinearLayout>
+</FrameLayout>

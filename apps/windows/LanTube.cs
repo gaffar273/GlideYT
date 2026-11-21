@@ -16,7 +16,10 @@ using System.Windows.Threading;
 
 class LanTube {
     class Player { public bool connected { get; set; } public string title { get; set; } public string error { get; set; } }
-    class Device { public string id { get; set; } public string name { get; set; } }
+    class Device {
+        public string id { get; set; } public string name { get; set; }
+        public bool legacy { get; set; } public long createdAt { get; set; }
+    }
     class Pair { public string code { get; set; } }
     class Status {
         public string[] addresses { get; set; } public Device[] devices { get; set; }
@@ -148,11 +151,19 @@ class LanTube {
             if (key != deviceKey) {
                 var list = UI<StackPanel>("Devices"); list.Children.Clear();
                 if (data.devices.Length == 0) list.Children.Add(new TextBlock { Text = "No paired phones", Margin = new Thickness(0,4,0,8) });
+                var earlier = new StackPanel();
                 foreach (var device in data.devices) {
-                    var button = new Button { Content = "Remove " + device.name, HorizontalAlignment = HorizontalAlignment.Left };
+                    var label = "Remove " + device.name;
+                    if (device.legacy) {
+                        var paired = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(device.createdAt).ToLocalTime();
+                        label += " · " + paired.ToString("g");
+                    }
+                    var button = new Button { Content = label, HorizontalAlignment = HorizontalAlignment.Left };
                     button.Click += async (s,e) => await Action(button, "revoke", new { deviceId = device.id });
-                    list.Children.Add(button);
+                    (device.legacy ? earlier : list).Children.Add(button);
                 }
+                if (earlier.Children.Count > 0)
+                    list.Children.Add(new Expander { Header = "Earlier pairings (" + earlier.Children.Count + ")", Content = earlier, Margin = new Thickness(0,8,0,4) });
                 deviceKey = key;
             }
             await DrawCode();

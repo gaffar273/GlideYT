@@ -41,3 +41,30 @@ test('a one-time code cannot be consumed by concurrent pairing requests', async 
   const results = await Promise.allSettled([auth.pair(code, 'A', 'a'), auth.pair(code, 'B', 'b')]);
   assert.equal(results.filter(item => item.status === 'fulfilled').length, 1);
 });
+
+test('re-pairing rotates one phone token and preserves other phones with the same model', async t => {
+  const auth = await store(t);
+  const firstId = '45ba4c10-f43a-4f3f-968a-d02b1dddac00';
+  const otherId = '45ba4c10-f43a-4f3f-968a-d02b1dddac01';
+  const first = await auth.pair(auth.code, 'Pixel', 'a', firstId);
+  const second = await auth.pair(auth.code, 'Pixel', 'a', otherId);
+  const renewed = await auth.pair(auth.code, 'Pixel', 'b', firstId);
+  assert.equal(first.deviceId, renewed.deviceId);
+  assert.throws(() => auth.authenticate('Bearer ' + first.token), {status: 401});
+  const reloaded = await new PairingStore(auth.file).load();
+  assert.equal(reloaded.list().length, 2);
+  assert.equal(reloaded.authenticate('Bearer ' + renewed.token).id, renewed.deviceId);
+  assert.equal(reloaded.authenticate('Bearer ' + second.token).id, second.deviceId);
+});
+
+test('an authenticated older phone upgrades its own pairing without merging unidentified tokens', async t => {
+  const auth = await store(t);
+  const old = await auth.pair(auth.code, 'My Android', 'a');
+  const current = await auth.pair(auth.code, 'My Android', 'a');
+  const phoneId = '45ba4c10-f43a-4f3f-968a-d02b1dddac00';
+  await auth.identify('Bearer ' + current.token, phoneId, 'Pixel');
+  await auth.identify('Bearer ' + current.token, phoneId, 'Pixel');
+  await assert.rejects(auth.identify('Bearer ' + old.token, phoneId, 'Pixel'), {status: 409});
+  assert.deepEqual(auth.list().map(item => [item.name, item.legacy]), [['My Android', true], ['Pixel', false]]);
+  assert.equal((await auth.pair(auth.code, 'Pixel', 'a', phoneId)).deviceId, current.deviceId);
+});

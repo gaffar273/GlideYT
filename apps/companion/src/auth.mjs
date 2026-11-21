@@ -4,6 +4,10 @@ import {dirname} from 'node:path';
 import {AppError} from './errors.mjs';
 
 const digest = token => createHash('sha256').update(token).digest('hex');
+function phoneKey(phoneId) {
+  if (typeof phoneId !== 'string' || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(phoneId)) throw new AppError('Invalid phone identifier.', 400);
+  return digest(phoneId);
+}
 const equal = (a, b) => typeof a === 'string' && typeof b === 'string' &&
   Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
@@ -40,16 +44,21 @@ export class PairingStore {
     if (!entry || entry.until <= now) { entry = {count: 0, until: now + 60000}; this.attempts.set(key, entry); }
     if (++entry.count > maximum) throw new AppError('Too many pairing attempts. Wait a minute.', 429);
   }
-  async pair(code, name, address) {
+  async pair(code, name, address, phoneId) {
     this.limit('all', 20); this.limit(address, 5);
-    if (this.now() >= this.expiresAt || !equal(code, this.code)) throw new AppError('Pairing code is invalid or expired.', 401);
-    if (this.devices.length >= 12) throw new AppError('Remove an old paired device on the laptop first.', 409);
-    this.rotate();
+    const key = phoneId === undefined ? null : phoneKey(phoneId);
     const token = randomBytes(32).toString('hex');
-    const device = {id: randomBytes(8).toString('hex'), name: String(name || 'Android').slice(0, 60), hash: digest(token), createdAt: this.now()};
-    this.devices.push(device);
-    try { await this.save(); } catch (error) { this.devices = this.devices.filter(item => item.id !== device.id); throw error; }
-    return {token, deviceId: device.id};
+    let deviceId;
+    await this.change(devices => {
+      if (this.now() >= this.expiresAt || !equal(code, this.code)) throw new AppError('Pairing code is invalid or expired.', 401);
+      const prior = key && devices.find(device => device.phoneKey === key);
+      if (!prior && devices.length >= 12) throw new AppError('Remove an old paired device on the laptop first.', 409);
+      this.rotate();
+      deviceId = prior?.id ?? randomBytes(8).toString('hex');
+      const device = {id: deviceId, name: String(name || 'Android').slice(0, 60), hash: digest(token), createdAt: this.now(), phoneKey: key};
+      return prior ? devices.map(item => item === prior ? device : item) : [...devices, device];
+    });
+    return {token, deviceId};
   }
   authenticate(header) {
     const token = /^Bearer ([a-f0-9]{64})$/.exec(header || '')?.[1];
@@ -59,17 +68,28 @@ export class PairingStore {
     if (!device) throw new AppError('This device is no longer paired.', 401);
     return device;
   }
-  async revoke(id) {
-    this.devices = this.devices.filter(device => device.id !== id);
-    await this.save();
+  async identify(header, phoneId, name) {
+    const key = phoneKey(phoneId);
+    await this.change(devices => {
+      const device = this.authenticate(header);
+      if (device.phoneKey === key) return devices;
+      if (device.phoneKey || devices.some(item => item.phoneKey === key)) throw new AppError('Phone identity already registered.', 409);
+      return devices.map(item => item === device ? {...item, phoneKey: key, name: String(name || item.name).slice(0, 60)} : item);
+    });
   }
-  list() { return this.devices.map(({hash, ...device}) => device); }
-  save() {
-    const value = JSON.stringify({version: 1, devices: this.devices}, null, 2);
+  revoke(id, hash) {
+    return this.change(devices => devices.filter(device => device.id !== id || (hash && hash !== device.hash)));
+  }
+  list() { return this.devices.map(({id, name, createdAt, phoneKey}) => ({id, name, createdAt, legacy: !phoneKey})); }
+  change(update) {
     this.writeQueue = this.writeQueue.catch(() => {}).then(async () => {
+      const devices = update(this.devices);
+      if (devices === this.devices) return;
+      const value = JSON.stringify({version: 1, devices}, null, 2);
       await mkdir(dirname(this.file), {recursive: true});
       await writeFile(this.file + '.tmp', value, {mode: 0o600});
       await rename(this.file + '.tmp', this.file);
+      this.devices = devices;
     });
     return this.writeQueue;
   }

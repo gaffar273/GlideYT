@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {AppState} from 'react-native';
+import {AppState, NativeModules} from 'react-native';
 import {createClient} from '@lan-tube/core';
 
 export function useRemote(session, onRevoked) {
@@ -11,12 +11,17 @@ export function useRemote(session, onRevoked) {
   const sending = useRef(false);
   useEffect(() => {
     if (!client) { setState(null); return; }
-    let stopped = false, timer, controller, running = false;
+    let stopped = false, timer, controller, running = false, identified = false;
     const poll = async () => {
       if (stopped || running || AppState.currentState !== 'active') return;
       const before = revision.current;
       running = true; controller = new AbortController();
       try {
+        if (!identified) {
+          const {phoneId, phoneName} = NativeModules.RemoteTools.getConstants();
+          try { await client.identify(phoneId, phoneName, controller.signal); identified = true; }
+          catch (failure) { identified = failure.status === 404 || failure.status === 409; }
+        }
         const next = await client.state(controller.signal);
         if (!stopped && !sending.current && before === revision.current) { setState(next); setError(''); }
       } catch (failure) {

@@ -17,6 +17,8 @@ Run **GlideYT-Setup.exe** on a 64-bit Windows PC and open **GlideYT** from Start
 
 After pairing, the phone remembers the laptop. Closing the Windows window frees its UI memory and keeps playback control available. Reopen Glide YT for pairing or settings. **Devices and settings** lets you remove a phone, allow private Wi-Fi access, or stop the companion.
 
+With version 0.1.2 on both devices, pairing the same phone again updates its entry. Open the updated Android app once to identify an existing pairing by phone model. Windows groups older, unidentified entries under **Earlier pairings**, where you can remove them by pairing date.
+
 Development builds use Node 22.11+ and npm workspaces. Windows opens YouTube in your default browser and uses its system media session for playback. Start a video once if the browser has not yet exposed its controls. Diagnostics and local credentials are in the private `.local` directory. The Windows executable can be rebuilt with `apps/windows/build.ps1`.
 
 ### Background controls

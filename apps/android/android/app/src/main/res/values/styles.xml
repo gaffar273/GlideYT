@@ -7,4 +7,10 @@
         <item name="android:windowBackground">#FAF8F7</item>
         <item name="android:colorAccent">#1ED760</item>
     </style>
+    <style name="PairScannerTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#101915</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">#101915</item>
+        <item name="android:colorAccent">#1ED760</item>
+    </style>
 </resources>

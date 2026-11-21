@@ -88,7 +88,7 @@ export function createCompanionServer({browser, pairing, port = 3210, laptopName
       if (path === '/v1/health' && request.method === 'GET') { respond(response, 200, {apiVersion: core.API_VERSION, service: 'lan-tube'}); return; }
       if (path === '/v1/pair' && request.method === 'POST') {
         const body = await jsonBody(request);
-        respond(response, 200, {...await pairing.pair(body.code, body.name, remote), laptopName, apiVersion: core.API_VERSION}); return;
+        respond(response, 200, {...await pairing.pair(body.code, body.name, remote, body.phoneId), laptopName, apiVersion: core.API_VERSION}); return;
       }
       const device = pairing.authenticate(request.headers.authorization);
       const now = Date.now();
@@ -107,8 +107,10 @@ export function createCompanionServer({browser, pairing, port = 3210, laptopName
         if (searchActive) throw new AppError('A search is already running. Try again shortly.', 429);
         searchActive = true;
         try { respond(response, 200, await browser.search(query)); } finally { searchActive = false; }
+      } else if (path === '/v1/identify') {
+        await pairing.identify(request.headers.authorization, body.phoneId, body.name); respond(response, 200, {ok: true});
       } else if (path === '/v1/unpair') {
-        await pairing.revoke(device.id); limits.delete(device.id); respond(response, 200, {ok: true});
+        await pairing.revoke(device.id, device.hash); limits.delete(device.id); respond(response, 200, {ok: true});
       } else throw new AppError('Unknown endpoint.', 404);
     } catch (error) {
       if (!response.headersSent && !response.destroyed) respond(response, error.status || 500, {error: error.status ? error.message : 'The companion encountered an error. Check the laptop and retry.'});

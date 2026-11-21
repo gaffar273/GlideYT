@@ -36,3 +36,17 @@ Filename: "{app}\GlideYT.exe"; Description: "{cm:LaunchProgram,GlideYT}"; Flags:
 [UninstallRun]
 Filename: "{app}\runtime\node.exe"; Parameters: """{app}\scripts\stop-installed.mjs"""; WorkingDir: "{app}"; Flags: runhidden waituntilterminated
 
+[Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  AppDir, Runtime, StopScript: String;
+  ExitCode: Integer;
+begin
+  AppDir := ExpandConstant('{app}');
+  Runtime := AppDir + '\runtime\node.exe';
+  StopScript := AppDir + '\scripts\stop-installed.mjs';
+  if FileExists(Runtime) and FileExists(StopScript) then
+    Exec(Runtime, '"' + StopScript + '"', AppDir, SW_HIDE, ewWaitUntilTerminated, ExitCode);
+  Result := '';
+end;
+

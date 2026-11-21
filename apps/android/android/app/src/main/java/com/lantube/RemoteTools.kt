@@ -1,13 +1,26 @@
 package com.lantube
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.provider.Settings
+import java.util.UUID
 import com.facebook.react.bridge.*
 import com.google.zxing.integration.android.IntentIntegrator
 
 class RemoteTools(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
     override fun getName() = "RemoteTools"
+    override fun getConstants(): Map<String, Any> {
+        val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+        val phoneId = if (!androidId.isNullOrBlank() && androidId != "9774d56d682e549c") {
+            UUID.nameUUIDFromBytes(("com.lantube:" + androidId).toByteArray(Charsets.UTF_8)).toString()
+        } else {
+            val prefs = context.getSharedPreferences("phone_identity", Context.MODE_PRIVATE)
+            prefs.getString("id", null) ?: UUID.randomUUID().toString().also { prefs.edit().putString("id", it).apply() }
+        }
+        return mapOf("phoneId" to phoneId, "phoneName" to Build.MODEL.ifBlank { "Android phone" })
+    }
     private var pending: Promise? = null
     init {
         context.addActivityEventListener(object : BaseActivityEventListener() {
@@ -27,8 +40,8 @@ class RemoteTools(private val context: ReactApplicationContext) : ReactContextBa
             try {
                 pending = promise
                 IntentIntegrator(activity).setDesiredBarcodeFormats(listOf("QR_CODE"))
-                    .setOrientationLocked(false).setBeepEnabled(false)
-                    .setPrompt("Scan the pairing code on your laptop").initiateScan()
+                    .setCaptureActivity(PairScannerActivity::class.java)
+                    .setOrientationLocked(false).setBeepEnabled(false).initiateScan()
             } catch (error: Exception) { pending = null; promise.reject("SCAN", error) }
         }
     }

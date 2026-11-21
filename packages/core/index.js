@@ -95,7 +95,8 @@ function createClient(address, token, fetcher = globalThis.fetch) {
     }
   }
   return {
-    pair: (code, name) => request('/v1/pair', {code, name}),
+    pair: (code, name, phoneId) => request('/v1/pair', {code, name, phoneId}),
+    identify: (phoneId, name, signal) => request('/v1/identify', {phoneId, name}, signal),
     state: signal => request('/v1/state', undefined, signal),
     search: (query, signal) => request('/v1/search', {query: validateQuery(query)}, signal),
     command: command => request('/v1/command', validateCommand(command)),
