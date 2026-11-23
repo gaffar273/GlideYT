@@ -68,6 +68,27 @@ static partial class YouTubeTab {
         }
         return result;
     }
+    static List<PlaylistLink> RecommendedVideos(string currentVideo) {
+        var result = new List<PlaylistLink>();
+        if (currentVideo == null) return result;
+        var section = pinnedWindow.FindFirst(TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.AutomationIdProperty, "related"));
+        if (section == null) return result;
+        var seen = new HashSet<string>();
+        foreach (AutomationElement link in section.FindAll(TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink))) {
+            try {
+                var url = LinkAddress(link);
+                if (url == null || url.AbsolutePath != "/watch" || Parameter(url,"list","[A-Za-z0-9_-]+") != null) continue;
+                var id = Parameter(url,"v","[A-Za-z0-9_-]{11}");
+                var title = link.Current.Name.Trim();
+                if (id == null || id == currentVideo || title.Length == 0 || Regex.IsMatch(title,@"^[\d:\s]+$") || !seen.Add(id)) continue;
+                result.Add(new PlaylistLink {videoId=id,title=title});
+                if (result.Count == 50) break;
+            } catch (ElementNotAvailableException) {}
+        }
+        return result;
+    }
     static bool PageReady(string path) {
         var address = Address(pinnedBar);
         if (address == null || address.PathAndQuery != path) return false;
@@ -100,6 +121,7 @@ static partial class YouTubeTab {
             var seed = url == null ? null : Parameter(url,"v","[A-Za-z0-9_-]{11}");
             if (seed != null && !rows.Any(r => r.listId == "RD"+seed))
                 rows.Insert(0,new PlaylistLink {listId="RD"+seed,videoId=seed,title="YouTube Mix · current video"});
+            rows.InsertRange(0, RecommendedVideos(seed));
         }
         return new {playlists=rows.Where(r => !String.IsNullOrWhiteSpace(r.title)).Take(100).ToArray()};
     }

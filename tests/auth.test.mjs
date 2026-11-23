@@ -4,6 +4,8 @@ import {mkdtemp, rm, readFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {PairingStore} from '../apps/companion/src/auth.mjs';
+import {createHash, createHmac} from 'node:crypto';
+import {discoveryReply} from '../apps/companion/src/discovery.mjs';
 
 async function store(t, options) {
   const directory = await mkdtemp(join(tmpdir(), 'lan-tube-test-'));
@@ -20,10 +22,28 @@ test('pairing persists hashes, survives restarts, rotates codes, and supports re
   const saved = await readFile(auth.file, 'utf8');
   assert.equal(saved.includes(result.token), false); assert.equal(Object.hasOwn(JSON.parse(saved), 'code'), false);
   const reloaded = await new PairingStore(auth.file).load();
+  assert.equal(reloaded.laptopId, result.laptopId);
+  assert.equal(reloaded.list()[0].connected, false);
   assert.equal(reloaded.authenticate('Bearer ' + result.token).id, result.deviceId);
   await assert.rejects(auth.pair(code, 'Other', '192.168.1.2'), {status: 401});
   await reloaded.revoke(result.deviceId);
   assert.throws(() => reloaded.authenticate('Bearer ' + result.token), {status: 401});
+});
+
+test('address discovery signs the current addresses for a remembered phone across a restart', async t => {
+  const storeBefore = await store(t);
+  const {token,deviceId} = await storeBefore.pair(storeBefore.code, 'Phone', 'wifi');
+  const after = await new PairingStore(storeBefore.file).load();
+  const key = createHash('sha256').update(token).digest();
+  const sign = message => createHmac('sha256', key).update(message).digest('hex');
+  const nonce = '01'.repeat(16);
+  const query = 'GlideYT-find ' + nonce + ' ' + sign('find ' + nonce);
+  const addresses = ['http://192.168.1.99:3210'];
+  const message = 'GlideYT-here ' + nonce + ' ' + addresses[0];
+  assert.equal(discoveryReply(query, after.devices, addresses), message + ' ' + sign(message));
+  assert.equal(discoveryReply(query.replace(nonce, 'ff'.repeat(16)), after.devices, addresses), undefined);
+  await after.revoke(deviceId);
+  assert.equal(discoveryReply(query, after.devices, addresses), undefined);
 });
 test('codes expire and unicode input is rejected cleanly', async t => {
   let now = 1000; const auth = await store(t, {now: () => now}); const code = auth.code;

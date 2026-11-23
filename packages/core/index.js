@@ -93,6 +93,7 @@ function createClient(address, token, fetcher = globalThis.fetch) {
       if (!response.ok) {
         const error = new Error(result.error || 'The laptop could not complete this request.');
         error.status = response.status;
+        error.laptopId = result.laptopId;
         throw error;
       }
       return result;
@@ -108,6 +109,7 @@ function createClient(address, token, fetcher = globalThis.fetch) {
     search: (query, signal) => request('/v1/search', {query: validateQuery(query)}, signal),
     command: command => request('/v1/command', validateCommand(command)),
     unpair: () => request('/v1/unpair', {}),
+    disconnect: () => request('/v1/disconnect', {}),
   };
 }
 

@@ -18,26 +18,32 @@ class LanTube {
     class Player { public bool connected { get; set; } public string title { get; set; } public string error { get; set; } }
     class Device {
         public string id { get; set; } public string name { get; set; }
-        public bool legacy { get; set; } public long createdAt { get; set; }
+        public bool connected { get; set; } public bool legacy { get; set; } public long createdAt { get; set; }
     }
     class Pair { public string code { get; set; } }
     class Status {
         public string[] addresses { get; set; } public Device[] devices { get; set; }
-        public Player state { get; set; } public Pair pairing { get; set; }
+        public bool backgroundEnabled { get; set; } public Player state { get; set; } public Pair pairing { get; set; }
     }
 
-    readonly string root = AppDomain.CurrentDomain.BaseDirectory;
+    static readonly string root = AppDomain.CurrentDomain.BaseDirectory;
     readonly JavaScriptSerializer json = new JavaScriptSerializer();
     readonly DispatcherTimer timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
     readonly Window window;
     Uri endpoint;
     string host, secret, code, qrLink, deviceKey;
-    bool refreshing, installMode, acting;
+    Device[] phones = new Device[0];
+    bool refreshing, installMode, pairingRequested, acting;
     T UI<T>(string name) where T : FrameworkElement { return (T)window.FindName(name); }
     void Say(string message) { UI<TextBlock>("Notice").Text = message; }
     void Text(string name, string value) { UI<TextBlock>(name).Text = value; }
 
     [STAThread] static void Main() {
+        if (Environment.GetCommandLineArgs().Contains("--companion")) {
+            try { RunNode("scripts/launch-windows.mjs", null).GetAwaiter().GetResult(); }
+            catch { Environment.ExitCode = 1; }
+            return;
+        }
         var app = new Application();
         try { app.Run(new LanTube().window); }
         catch (Exception ex) { MessageBox.Show(ex.GetBaseException().Message, "Glide YT"); }
@@ -48,6 +54,7 @@ class LanTube {
         UI<Button>("CloseWindow").Click += (s,e) => window.Close();
         UI<Button>("MinimizeWindow").Click += (s,e) => window.WindowState = WindowState.Minimized;
         installMode = Environment.GetCommandLineArgs().Contains("--install");
+        pairingRequested = installMode;
         window.Loaded += async (s,e) => {
             try {
                 await RunNode("scripts/launch-windows.mjs", null);
@@ -68,25 +75,12 @@ class LanTube {
             UI<StackPanel>("Home").Visibility = show ? Visibility.Collapsed : Visibility.Visible;
             UI<Button>("Settings").Content = show ? "\uE711" : "\uE713"; Say("");
         };
-        BindCopy("Edge"); BindCopy("Chrome");
+        UI<Button>("PairAnother").Click += async (s,e) => { pairingRequested = true; installMode = false; await ShowPhone(); };
+        UI<Button>("BackToPhone").Click += async (s,e) => { pairingRequested = false; installMode = false; await ShowPhone(); };
         Bind("Background","background"); Bind("Open","open"); Bind("Wifi","wifi"); Bind("Stop","stop");
     }
 
-    void BindCopy(string browser) {
-        var button = UI<Button>("Copy" + browser);
-        var address = UI<TextBox>(browser + "Address");
-        button.Click += (s,e) => {
-            try {
-                Clipboard.SetDataObject(address.Text, true);
-                UI<Button>("CopyEdge").Content = UI<Button>("CopyChrome").Content = "Copy";
-                button.Content = "Copied";
-            } catch (System.Runtime.InteropServices.ExternalException) {
-                address.Focus(); address.SelectAll(); Say("Press Ctrl+C to copy the selected address.");
-            }
-        };
-    }
-
-    async Task<string> RunNode(string script, string input) {
+    static async Task<string> RunNode(string script, string input) {
         var bundledNode = Path.Combine(root, "runtime", "node.exe");
         var settings = new ProcessStartInfo(File.Exists(bundledNode) ? bundledNode : "node.exe", script) {
             CreateNoWindow = true, UseShellExecute = false, WorkingDirectory = root,
@@ -131,7 +125,7 @@ class LanTube {
         try {
             await Api(path, body);
             if (path == "stop") { window.Close(); return; }
-            if (path == "background") Say("Background controls connected. This YouTube tab is saved.");
+            if (path == "background") Say("Background controls connected. Use Open YouTube to return to this window.");
             if (path == "wifi") Say("Private Wi-Fi access enabled.");
             await Refresh();
         } catch (Exception ex) { Say(ex.Message); }
@@ -144,6 +138,11 @@ class LanTube {
             var data = json.Deserialize<Status>(await Api("status", null));
             Text("Status", data.state.connected ? "Connected" : "Idle");
             Text("Playing", data.state.connected ? data.state.title ?? "Ready to play" : data.state.error);
+            UI<Button>("Background").Content = data.backgroundEnabled ? "Open background player" : "Set up background controls";
+            if (deviceKey != null && data.devices.Any(d => d.connected && !phones.Any(p => p.id == d.id && p.connected))) {
+                pairingRequested = false; installMode = false;
+            }
+            phones = data.devices;
             code = data.pairing.code;
             host = data.addresses.Select(a => new Uri(a).Authority).FirstOrDefault();
             UI<TextBox>("Address").Text = host ?? "Connect to Wi-Fi";
@@ -166,19 +165,38 @@ class LanTube {
                     list.Children.Add(new Expander { Header = "Earlier pairings (" + earlier.Children.Count + ")", Content = earlier, Margin = new Thickness(0,8,0,4) });
                 deviceKey = key;
             }
-            await DrawCode();
-        } catch (Exception ex) { Text("Status", "Offline"); Say(ex.Message); }
+        } catch (Exception ex) {
+            Text("Status", "Offline");
+            foreach (var phone in phones) phone.connected = false;
+            host = null; code = null;
+            Say(ex.Message);
+        }
+        try { await ShowPhone(); }
         finally { refreshing = false; }
+    }
+    async Task ShowPhone() {
+        bool pair = phones.Length == 0 || pairingRequested;
+        UI<Border>("PairCard").Visibility = pair ? Visibility.Visible : Visibility.Collapsed;
+        UI<Border>("PhoneCard").Visibility = pair ? Visibility.Collapsed : Visibility.Visible;
+        UI<Button>("BackToPhone").Visibility = phones.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (pair) { await DrawCode(); return; }
+        qrLink = null; UI<Image>("QR").Source = null; Text("Code", "");
+        var online = phones.Where(d => d.connected).ToArray();
+        var shown = online.Length > 0 ? online : phones.OrderByDescending(d => d.createdAt).Take(1).ToArray();
+        Text("PhoneNames", String.Join(", ", shown.Select(d => d.name)));
+        Text("PhoneStatus", online.Length > 0 ? "Connected" : "Disconnected");
+        UI<Border>("PhoneShape").Opacity = online.Length > 0 ? 1.0 : 0.45;
     }
     async Task DrawCode() {
 
         Text("PairHeading", installMode ? "Install Android app" : "Pair your phone");
-        Text("Hint", host == null ? "Connect your laptop to Wi-Fi." : installMode ? "Scan to download the Android app." : "Open Glide YT on your phone and tap Scan QR code.");
+        Text("Hint", installMode ? "Scan with your phone camera to download the latest Android app." : host == null ? "Connect your laptop to Wi-Fi." : "Open Glide YT on your phone and tap Scan QR code.");
         Text("Code", installMode || code == null ? "" : code.Insert(3, " "));
         UI<TextBlock>("Code").Visibility = installMode ? Visibility.Collapsed : Visibility.Visible;
         UI<Button>("SwitchMode").Content = installMode ? "Show pairing code" : "Install Android app";
         var image = UI<Image>("QR");
-        var link = host == null || code == null ? null : installMode ? "http://" + host + "/download/android.apk" : "lantube://pair/" + host + "/" + code;
+        var link = installMode ? "https://github.com/gaffar273/GlideYT/releases/latest/download/GlideYT-Android.apk"
+            : host == null || code == null ? null : "lantube://pair/" + host + "/" + code;
         if (link == qrLink) return;
         qrLink = link; image.Source = null;
         if (link == null) return;

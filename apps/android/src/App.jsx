@@ -53,7 +53,7 @@ function PairScreen({onPaired}) {
       if (!/^\d{6}$/.test(digits)) throw new Error('Enter the six-digit code shown on your laptop.');
       const {phoneName, phoneId} = NativeModules.RemoteTools.getConstants();
       const result = await createClient(normalized).pair(digits, phoneName, phoneId);
-      const session = {address: normalized, token: result.token, laptopName: result.laptopName};
+      const session = {address: normalized, token: result.token, laptopName: result.laptopName, laptopId:result.laptopId};
       await saveSession(session); onPaired(session);
     } catch (failure) {
       setError(failure.name === 'AbortError' || failure.message === 'Network request failed'
@@ -127,8 +127,8 @@ function Timeline({state, busy, onSeek, setDragging}) {
   </View>;
 }
 
-function RemoteScreen({session, onDisconnect}) {
-  const {client, state, busy, error, command} = useRemote(session, onDisconnect);
+function RemoteScreen({session, onForget, onPause, onSessionChange}) {
+  const {client, state, busy, error, command} = useRemote(session, onForget, onSessionChange);
   const [dragging, setDragging] = useState(false);
   const {height, width} = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -280,8 +280,9 @@ function RemoteScreen({session, onDisconnect}) {
   return <View style={{flex: 1}}>
     <TopBar><View style={styles.connection}><View style={[styles.dot, {backgroundColor: ready ? '#267455' : '#c89060'}]}/>
       <Text style={styles.connectionText} numberOfLines={1}>{session.laptopName}</Text></View>
-      <Button icon="disconnect" secondary label="Disconnect" onPress={() => Alert.alert('Disconnect this phone?', 'You can pair again from the Windows app.', [
-        {text: 'Cancel', style: 'cancel'}, {text: 'Disconnect', style: 'destructive', onPress: async () => { try { await client.unpair(); } catch {} onDisconnect(); }},
+      <Button icon="disconnect" secondary label="Disconnect" onPress={() => Alert.alert(session.laptopName, 'Disconnect until you reconnect or reopen Glide YT. Forgetting the laptop removes the pairing.', [
+        {text: 'Cancel', style: 'cancel'}, {text: 'Forget laptop', style: 'destructive', onPress: async () => { try { await client.unpair(); } catch {} onForget(); }},
+        {text:'Disconnect', onPress:() => { onPause(); client.disconnect().catch(() => {}); }},
       ])}/>
     </TopBar>
     <View style={styles.searchRow}>
@@ -313,12 +314,27 @@ function Root() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [storageError, setStorageError] = useState('');
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    const listener = AppState.addEventListener('change', value => { if (value === 'active') setPaused(false); });
+    return () => listener.remove();
+  }, []);
+  const activeSession = useRef(null);
+  activeSession.current = session;
+  const updateConnection = useCallback((previous, changes) => {
+    if (activeSession.current !== previous) return;
+    const next = {...previous, ...changes};
+    activeSession.current = next;
+    saveSession(next).catch(error => setStorageError(error.message));
+    setSession(next);
+  }, []);
   useEffect(() => { loadSession().then(setSession).catch(error => setStorageError(error.message)).finally(() => setLoading(false)); }, []);
-  const disconnect = useCallback(() => { clearSession().catch(() => {}); setSession(null); }, []);
+  const disconnect = useCallback(() => { activeSession.current = null; clearSession().catch(() => {}); setPaused(false); setSession(null); }, []);
   return <View style={[styles.safe, {paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right}]}>
     <StatusBar barStyle="dark-content" backgroundColor={colors.bg}/>
     {!session && <TopBar/>}
-    {loading ? <ActivityIndicator style={{flex: 1}} color={colors.accent}/> : session ? <RemoteScreen session={session} onDisconnect={disconnect}/>
+    {loading ? <ActivityIndicator style={{flex: 1}} color={colors.accent}/> : session && paused ? <><TopBar/><View style={styles.pairContent}><Text style={styles.hero}>Disconnected</Text><Text style={styles.description}>{session.laptopName}</Text><Button label="Reconnect" onPress={() => setPaused(false)}/></View></>
+      : session ? <RemoteScreen session={session} onForget={disconnect} onPause={() => setPaused(true)} onSessionChange={updateConnection}/>
       : <FlatList showsVerticalScrollIndicator={false} data={[]} renderItem={null} keyboardShouldPersistTaps="handled" ListHeaderComponent={<><PairScreen onPaired={setSession}/>{!!storageError && <Text style={styles.error}>{storageError}</Text>}</>}/>}
   </View>;
 }

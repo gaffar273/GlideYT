@@ -29,23 +29,28 @@
      <TextBlock x:Name="Playing" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" MaxHeight="40" Margin="0,6,0,10" Foreground="#E1EEE7"/>
      <Button x:Name="Open" Content="&#x25B6;   Open YouTube" HorizontalAlignment="Left" Background="#CD1835" Foreground="White"/>
     </StackPanel></Border>
-    <Border Style="{StaticResource Card}"><StackPanel HorizontalAlignment="Center">
+    <Border x:Name="PhoneCard" Visibility="Collapsed" Style="{StaticResource Card}"><StackPanel HorizontalAlignment="Center" Margin="4,10">
+     <Border x:Name="PhoneShape" Width="64" Height="112" CornerRadius="12" BorderThickness="3" BorderBrush="#236047" Background="#E7F1E9" HorizontalAlignment="Center">
+      <Grid><Ellipse Width="5" Height="5" Fill="#236047" VerticalAlignment="Top" Margin="0,6,0,0"/><Border Width="22" Height="3" Background="#236047" CornerRadius="2" VerticalAlignment="Bottom" Margin="0,0,0,6"/></Grid>
+     </Border>
+     <TextBlock x:Name="PhoneNames" TextWrapping="Wrap" TextAlignment="Center" FontSize="22" FontWeight="SemiBold" Margin="0,12,0,2"/>
+     <TextBlock x:Name="PhoneStatus" TextAlignment="Center" TextWrapping="Wrap" Foreground="#39604E"/>
+     <Button x:Name="PairAnother" Content="Pair another phone" HorizontalAlignment="Center" Margin="0,14,0,0"/>
+    </StackPanel></Border>
+    <Border x:Name="PairCard" Visibility="Collapsed" Style="{StaticResource Card}"><StackPanel HorizontalAlignment="Center">
      <TextBlock x:Name="PairHeading" FontSize="23" FontWeight="SemiBold" HorizontalAlignment="Center"/>
      <TextBlock x:Name="Hint" TextWrapping="Wrap" TextAlignment="Center" Margin="0,5,0,10" Foreground="#635C60"/>
      <Image x:Name="QR" Width="160" Height="160" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" AutomationProperties.Name="Phone QR code"/>
      <TextBlock x:Name="Code" HorizontalAlignment="Center" FontSize="23" FontFamily="Consolas" FontWeight="Bold"/>
      <Button x:Name="SwitchMode" Background="#236047" Foreground="White" HorizontalAlignment="Center" Margin="0,10,0,0"/>
+     <Button x:Name="BackToPhone" Content="Back to phone" HorizontalAlignment="Center" Visibility="Collapsed"/>
     </StackPanel></Border>
    </StackPanel>
    <StackPanel x:Name="SettingsPage" Visibility="Collapsed">
     <TextBlock Text="Devices and settings" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,16"/>
     <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Background controls" FontSize="17" FontWeight="SemiBold"/>
-     <TextBox IsReadOnly="True" BorderThickness="0" Background="Transparent" Text="Copy the address for your Windows default browser, open it there, and enable remote debugging. Then connect below." TextWrapping="Wrap" Margin="0,6"/>
-     <DockPanel><Button x:Name="CopyEdge" DockPanel.Dock="Right" Content="Copy" AutomationProperties.Name="Copy Edge address"/>
-      <TextBox x:Name="EdgeAddress" Text="edge://inspect/#remote-debugging" AutomationProperties.Name="Edge setup address" IsReadOnly="True" BorderThickness="0" Background="Transparent" VerticalAlignment="Center" TextWrapping="Wrap"/></DockPanel>
-     <DockPanel><Button x:Name="CopyChrome" DockPanel.Dock="Right" Content="Copy" AutomationProperties.Name="Copy Chrome address"/>
-      <TextBox x:Name="ChromeAddress" Text="chrome://inspect/#remote-debugging" AutomationProperties.Name="Chrome setup address" IsReadOnly="True" BorderThickness="0" Background="Transparent" VerticalAlignment="Center" TextWrapping="Wrap"/></DockPanel>
-     <Button x:Name="Background" Content="Connect background controls"/></StackPanel></Border>
+     <TextBlock Text="Use a dedicated YouTube window for background playback. Sign in there once for your playlists. Open YouTube will reuse this profile." TextWrapping="Wrap" Margin="0,6"/>
+     <Button x:Name="Background" Content="Set up background controls"/></StackPanel></Border>
     <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Paired phones" FontSize="17" FontWeight="SemiBold"/><StackPanel x:Name="Devices"/></StackPanel></Border>
     <Border Style="{StaticResource Card}"><StackPanel><TextBlock Text="Laptop address" FontSize="17" FontWeight="SemiBold"/><TextBox x:Name="Address" IsReadOnly="True" BorderThickness="0" Margin="0,6" Background="Transparent"/>
      <WrapPanel><Button x:Name="Wifi" Content="Allow Wi-Fi access"/><Button x:Name="Stop" Content="Stop companion"/></WrapPanel></StackPanel></Border>

@@ -8,39 +8,87 @@ import {BackgroundPlayer} from '../apps/companion/src/background-player.mjs';
 import {ProfileBrowser} from '../apps/companion/src/profile-browser.mjs';
 import core from '../packages/core/index.js';
 
-test('background controls reuse a saved tab across songs, disconnects and companion restarts', async t => {
+test('background setup launches locally once and restores the dedicated profile without opening a window', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'glide-background-'));
-  t.after(() => rm(directory, {recursive:true, force:true}));
+  t.after(() => rm(directory, {recursive:true,force:true}));
   const file = join(directory, 'background-controls.json');
-  const targets = [], songs = [];
-  let disconnect, denied = false;
-  async function connect(browser, title, portFile, targetId) {
-    targets.push(targetId);
-    if (denied) throw new Error('Browser declined');
-    return {targetId:'tab-one', socket:{connected:true}, onDisconnect(fn) { disconnect = fn; }, close() {},
-      async command(song) { songs.push(song.videoId); return {ok:true}; }};
-  }
-  const first = new ProfileBrowser(file, connect);
-  first.request = async cmd => cmd.type === 'browser' ? 'msedge' : {title:'Song'};
+  const opens = [], restores = [], songs = [];
+  let disconnect;
+  const player = () => ({targetId:'tab-one', socket:{connected:true,send:async () => {}},
+    onDisconnect(fn) { disconnect = fn; }, close() {}, async command(value) { songs.push(value); return {ok:true}; }});
+  const open = async (browser, portFile) => { opens.push(portFile); return player(); };
+  let closed = false;
+  const connect = async (browser, title, portFile, targetId) => {
+    restores.push({portFile,targetId});
+    if (closed) throw Error('Open YouTube');
+    return player();
+  };
+  const first = new ProfileBrowser(file, connect, open);
+  first.request = async () => 'msedge';
   await first.loadBackground();
-  assert.equal(targets.length, 0);
+  assert.equal(restores.length, 0);
   await first.enableBackground();
-  assert.deepEqual(JSON.parse(await readFile(file)), {browser:'msedge',targetId:'tab-one'});
+  await first.enableBackground();
+  const portFile = join(directory,'youtube-msedge','DevToolsActivePort');
+  assert.deepEqual(opens,[portFile]);
+  assert.deepEqual(JSON.parse(await readFile(file)), {mode:'dedicated',browser:'msedge',targetId:'tab-one'});
   for (const videoId of ['dQw4w9WgXcQ','abcdefghijk']) await first.command({type:'select',videoId});
   assert.equal(songs.length, 2);
-  assert.equal(targets.length, 1);
-  disconnect();
-  await first.connecting;
   first.close();
-  const restarted = new ProfileBrowser(file, connect);
+
+  const restarted = new ProfileBrowser(file, connect, open);
   await restarted.loadBackground();
   await restarted.connecting;
-  assert.deepEqual(targets, [undefined,'tab-one','tab-one']);
-  denied = true;
+  assert.deepEqual(restores,[{portFile,targetId:'tab-one'}]);
+  closed = true;
   disconnect();
-  await assert.rejects(restarted.connecting);
-  assert.equal(targets.length, 4);
+  await assert.rejects(restarted.command({type:'select',videoId:'abcdefghijk'}), /Open YouTube/);
+  assert.deepEqual(opens,[portFile]);
+  await restarted.open();
+  assert.deepEqual(opens,[portFile,portFile]);
   restarted.close();
+});
+
+test('Suggested returns distinct related videos in page order before mixes and plays the tapped one', async () => {
+  const location = new URL('https://www.youtube.com/watch?v=abcdefghijk');
+  let destination;
+  location.assign = url => { destination = url.href; };
+  const link = (path, title) => ({href:new URL(path, location).href, title, textContent:'', getAttribute:() => null});
+  const links = [
+    link('/watch?v=abcdefghijk', 'Already playing'),
+    link('/watch?v=abcdefghij1', '3:25'),
+    link('/watch?v=abcdefghij1', 'First suggestion'),
+    link('/watch?v=abcdefghij1', 'First suggestion again'),
+    link('/watch?v=abcdefghij2', 'Second suggestion'),
+    link('https://example.org/watch?v=abcdefghij3', 'External')
+  ];
+  const document = {title:'Current', getElementById:() => null, querySelectorAll:() => links,
+    querySelector:selector => selector.includes('#related') ? {querySelectorAll:() => links} : null};
+  const player = new BackgroundPlayer({async send(_, {expression}) {
+    return {result:{value:await runInNewContext(expression,{URL,location,document})}};
+  }}, 'session', 'tab');
+  const {playlists} = await player.command({type:'suggested'});
+  assert.deepEqual(Array.from(playlists, item => item.listId || item.title),
+    ['First suggestion','Second suggestion','RDabcdefghijk']);
+  assert.equal(destination, undefined);
+  await player.command({type:'select',videoId:playlists[1].videoId});
+  assert.equal(destination,'https://www.youtube.com/watch?v=abcdefghij2');
+});
+
+test('only detaching the controlled session closes its transport', () => {
+  const transport = new EventTarget();
+  let disconnected = 0;
+  const player = new BackgroundPlayer({socket:transport, close() {
+    transport.dispatchEvent(new Event('close'));
+  }}, 'saved-session', 'tab-one');
+  player.onDisconnect(() => disconnected++);
+  const detach = sessionId => transport.dispatchEvent(new MessageEvent('message', {
+    data:JSON.stringify({method:'Target.detachedFromTarget', params:{sessionId}})
+  }));
+  detach('another-session');
+  assert.equal(disconnected, 0);
+  detach('saved-session');
+  assert.equal(disconnected, 1);
 });
 
 test('repeat and shuffle follow player state and an absent quality menu gives no choices', async () => {

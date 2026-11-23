@@ -47,6 +47,11 @@ class RemoteTools(private val context: ReactApplicationContext) : ReactContextBa
     }
 
     @ReactMethod
+    fun findLaptop(address: String, token: String, promise: Promise) {
+        Thread { promise.resolve(LaptopDiscovery.find(address, token)) }.start()
+    }
+
+    @ReactMethod
     fun connect(address: String, token: String, laptop: String, promise: Promise) {
         try {
             val intent = Intent(context, RemotePlaybackService::class.java)

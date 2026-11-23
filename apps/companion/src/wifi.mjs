@@ -9,14 +9,15 @@ export function requestPrivateWifiAccess(port) {
   }
   const quote = value => "'" + value.replace(/'/g, "''") + "'";
   const powershell = join(process.env.SystemRoot || 'C:/Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe');
-  const ruleName = 'LanTube-Private-TCP-' + port;
   const command = `$ErrorActionPreference='Stop';
-    $existing = Get-NetFirewallRule -Name ${quote(ruleName)} -ErrorAction SilentlyContinue;
+    foreach ($protocol in 'TCP','UDP') {
+    $name = "LanTube-Private-$protocol-${port}";
+    $existing = Get-NetFirewallRule -Name $name -ErrorAction SilentlyContinue;
     if ($existing) {
       if ($existing.Enabled -ne 'True' -or $existing.Action -ne 'Allow' -or $existing.Profile -ne 'Private') { throw 'Existing Glide YT firewall rule needs manual review.' }
     } else {
-      New-NetFirewallRule -Name ${quote(ruleName)} -DisplayName 'Glide YT - Private Wi-Fi' -Direction Inbound -Action Allow -Protocol TCP -LocalPort ${port} -RemoteAddress LocalSubnet -Program ${quote(process.execPath)} -Profile Private | Out-Null
-    }`;
+      New-NetFirewallRule -Name $name -DisplayName "Glide YT - Private Wi-Fi ($protocol)" -Direction Inbound -Action Allow -Protocol $protocol -LocalPort ${port} -RemoteAddress LocalSubnet -Program ${quote(process.execPath)} -Profile Private | Out-Null
+    }}`;
   const encoded = Buffer.from(command, 'utf16le').toString('base64');
   const elevate = `$ErrorActionPreference='Stop'; $p=Start-Process -FilePath ${quote(powershell)} -ArgumentList @('-NoProfile','-EncodedCommand',${quote(encoded)}) -Verb RunAs -WindowStyle Hidden -Wait -PassThru; exit $p.ExitCode`;
   return new Promise((resolve, reject) => {

@@ -74,7 +74,7 @@ export function createCompanionServer({browser, pairing, port = 3210, laptopName
         if (!loopback(remote) || typeof secret !== 'string' || !/^[a-f0-9]{64}$/.test(secret) ||
           !timingSafeEqual(Buffer.from(secret), Buffer.from(adminSecret))) throw new AppError('Open Glide YT on the laptop.', 403);
         if (path === '/admin/status' && request.method === 'GET') {
-          respond(response, 200, {laptopName, addresses: lanAddresses(port), pairing: pairing.currentCode(), devices: pairing.list(), state: await browser.state(),
+          respond(response, 200, {laptopName, addresses: lanAddresses(port), pairing: pairing.currentCode(), devices: pairing.list(), backgroundEnabled:Boolean(browser.savedBackground), state: await browser.state(),
             memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024)}); return;
         }
         if (request.method !== 'POST') throw new AppError('Unknown setup action.', 404);
@@ -103,7 +103,8 @@ export function createCompanionServer({browser, pairing, port = 3210, laptopName
       if (limit.until <= now) { limit.count = 0; limit.until = now + 60000; }
       if (++limit.count > 120) throw new AppError('Too many requests. Wait a moment.', 429);
       limits.set(device.id, limit);
-      if (path === '/v1/state' && request.method === 'GET') { respond(response, 200, await browser.state()); return; }
+      pairing.touch(device.id);
+      if (path === '/v1/state' && request.method === 'GET') { respond(response, 200, {...await browser.state(), laptopId: pairing.laptopId}); return; }
       if (request.method !== 'POST') throw new AppError('Unknown endpoint.', 404);
       const body = await jsonBody(request);
       if (path === '/v1/command') {
@@ -116,11 +117,14 @@ export function createCompanionServer({browser, pairing, port = 3210, laptopName
         try { respond(response, 200, await browser.search(query)); } finally { searchActive = false; }
       } else if (path === '/v1/identify') {
         await pairing.identify(request.headers.authorization, body.phoneId, body.name); respond(response, 200, {ok: true});
+      } else if (path === '/v1/disconnect') {
+        pairing.disconnect(device.id); respond(response, 200, {ok:true});
       } else if (path === '/v1/unpair') {
         await pairing.revoke(device.id, device.hash); limits.delete(device.id); respond(response, 200, {ok: true});
       } else throw new AppError('Unknown endpoint.', 404);
     } catch (error) {
-      if (!response.headersSent && !response.destroyed) respond(response, error.status || 500, {error: error.status ? error.message : 'The companion encountered an error. Check the laptop and retry.'});
+      if (!response.headersSent && !response.destroyed) respond(response, error.status || 500, {error: error.status ? error.message : 'The companion encountered an error. Check the laptop and retry.',
+        ...(error.status === 401 ? {laptopId:pairing.laptopId} : {})});
     }
   });
   server.requestTimeout = 20000; server.headersTimeout = 10000; server.maxHeadersCount = 40;

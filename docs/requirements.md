@@ -13,7 +13,7 @@
 ## Initial implementation choices
 
 - Installed Chrome/Edge runs with one dedicated profile. This is a separate profile from everyday browsing because modern Chrome requires it for the debugging connection.
-- A QR link opens Android with the laptop address and short code filled in. Manual pairing is available. Pairing persists. If DHCP changes the laptop address, re-pair (a DHCP reservation avoids that).
+- A QR link opens Android with the laptop address and short code filled in. Manual pairing is available. Pairing persists. When DHCP changes the address, the phone can rediscover its paired laptop on the same private Wi-Fi.
 - Phone is a remote for the Windows player. Playback in the official Android YouTube application and automatic cross-device handoff are not implemented.
 - Search uses the YouTube page's public results format and can require maintenance. Account access, consent, autoplay, ads, and region/age restrictions remain governed by YouTube/browser behavior.
 - Local HTTP is appropriate only on a trusted LAN. YouTube streaming still needs internet.

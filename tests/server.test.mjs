@@ -33,6 +33,27 @@ test('end-to-end pairing, authorized controls, search, and revocation', async t 
   assert.deepEqual((await client.search('test')).results, []);
   await client.unpair(); await assert.rejects(client.state(), {status: 401});
 });
+test('phone presence follows authenticated traffic independently of YouTube and survives a soft disconnect', async t => {
+  const {url, pairing, adminSecret} = await setup(t);
+  const status = async () => (await fetch(url + '/admin/status', {headers:{'X-Admin-Secret':adminSecret}})).json();
+  let clock = Date.now();
+  pairing.now = () => clock;
+  const {token} = await core.createClient(url).pair(pairing.code, 'Galaxy S24');
+  const client = core.createClient(url, token);
+  assert.equal((await status()).devices[0].connected, true);
+  clock += 31000;
+  assert.equal((await status()).devices[0].connected, false);
+  await assert.rejects(core.createClient(url).state(), {status:401});
+  assert.equal((await status()).devices[0].connected, false);
+  await client.state();
+  assert.equal((await status()).devices[0].name, 'Galaxy S24');
+  assert.equal((await status()).devices[0].connected, true);
+  await client.disconnect();
+  assert.equal((await status()).devices[0].connected, false);
+  await client.state();
+  assert.equal((await status()).devices[0].connected, true);
+});
+
 test('phone installation serves only the fixed APK and never reveals the pairing code', async t => {
   const {url, pairing} = await setup(t);
   const page = await fetch(url + '/install'); assert.equal(page.status, 200);

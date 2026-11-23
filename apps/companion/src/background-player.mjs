@@ -1,5 +1,7 @@
-import {readFile} from 'node:fs/promises';
-import {join} from 'node:path';
+import {mkdir, readFile} from 'node:fs/promises';
+import {dirname, join} from 'node:path';
+import {existsSync} from 'node:fs';
+import {spawn} from 'node:child_process';
 import {CdpConnection} from './cdp.mjs';
 import {AppError} from './errors.mjs';
 import {readState, controlPlayer} from './youtube-page.mjs';
@@ -82,6 +84,20 @@ async function pageAction(cmd, read, control) {
   if (cmd.type === 'navigate') { location.assign(new URL(cmd.path, location.origin)); return {ok:true}; }
   if (cmd.type === 'links') {
     const rows = new Map();
+    const videos = new Map();
+    if (cmd.mix && url.pathname === '/watch') {
+      const related = document.querySelector('ytd-watch-flexy:not([hidden]) #related');
+      for (const link of related?.querySelectorAll('a[href]') ?? []) {
+        const href = new URL(link.href, url);
+        const videoId = href.searchParams.get('v');
+        if (href.origin !== url.origin || href.pathname !== '/watch' || href.searchParams.has('list') ||
+            !/^[\w-]{11}$/.test(videoId || '') || videoId === url.searchParams.get('v') || videos.has(videoId)) continue;
+        const title = (link.title || link.textContent.trim() || link.getAttribute('aria-label') || '').trim();
+        if (!title || /^[\d:\s]+$/.test(title)) continue;
+        videos.set(videoId, {videoId,title,thumbnail:'https://i.ytimg.com/vi/'+videoId+'/mqdefault.jpg'});
+        if (videos.size === 50) break;
+      }
+    }
     let last;
     for (const el of document.querySelectorAll('a[href]')) {
       const href = new URL(el.href,location.href);
@@ -101,7 +117,7 @@ async function pageAction(cmd, read, control) {
     const items=[...rows.values()];
     if (cmd.mix && state().videoId && !rows.has('RD'+state().videoId))
       items.unshift({listId:'RD'+state().videoId,videoId:state().videoId,title:'YouTube Mix · current video'});
-    return {items,path:url.pathname+url.search};
+    return {items:[...videos.values(),...items],path:url.pathname+url.search};
   }
   throw Error('Unknown player control.');
 }
@@ -109,23 +125,46 @@ async function pageAction(cmd, read, control) {
 export class BackgroundPlayer {
   constructor(socket, sessionId, targetId) { this.socket=socket; this.sessionId=sessionId; this.targetId=targetId; }
   static async connect(browser, title, portFile, savedTargetId) {
-    const directory = browser==='msedge' ? 'Microsoft/Edge' : browser==='chrome' ? 'Google/Chrome' : null;
-    if (!directory) throw new AppError('Choose Edge or Chrome as the default browser.');
     let port, path;
-    try { [port,path]=(await readFile(portFile ?? join(process.env.LOCALAPPDATA,directory,'User Data','DevToolsActivePort'),'utf8')).trim().split(/\r?\n/); } catch {}
+    try { [port,path]=(await readFile(portFile,'utf8')).trim().split(/\r?\n/); } catch {}
     if (!/^\d+$/.test(port || '') || !/^\/devtools\/browser\/[\w-]+$/.test(path || ''))
-      throw new AppError('Enable remote debugging in your browser, then click Connect background controls.');
-    const socket = new CdpConnection('ws://127.0.0.1:'+port+path,{timeout:45000});
+      throw new AppError('Choose Open YouTube in Glide YT on the laptop.');
+    const socket = new CdpConnection('ws://127.0.0.1:'+port+path,{timeout:3500});
     try {
       const {targetInfos}=await socket.send('Target.getTargets');
       const tabs=targetInfos.filter(t=>t.type==='page' && t.url.startsWith('https://www.youtube.com/'));
       const matches=tabs.filter(t=>normalTitle(t.title.replace(/ - YouTube$/,''))===normalTitle(title));
-      const tab=savedTargetId ? tabs.find(t=>t.targetId===savedTargetId)
-        : matches.length===1 ? matches[0] : tabs.length===1 ? tabs[0] : null;
+      const tab=tabs.find(t=>t.targetId===savedTargetId) ??
+        (matches.length===1 ? matches[0] : tabs.length===1 ? tabs[0] : null);
+      if (tabs.length > 1 && !tab) throw new AppError('Keep one YouTube tab open in the Glide YT browser window.', 409);
       if (!tab) throw new AppError('Play the intended YouTube video, then connect again so Glide YT can identify its tab.');
       const {sessionId}=await socket.send('Target.attachToTarget',{targetId:tab.targetId,flatten:true});
       return new BackgroundPlayer(socket,sessionId,tab.targetId);
     } catch(error) { socket.close(); throw error; }
+  }
+  static async open(browser, portFile, targetId) {
+    try {
+      const player = await BackgroundPlayer.connect(browser, null, portFile, targetId);
+      try { await player.socket.send('Page.bringToFront', {}, player.sessionId); return player; }
+      catch (error) { player.close(); throw error; }
+    } catch (error) { if (error.status === 409) throw error; }
+    const profile = dirname(portFile);
+    const relative = browser === 'chrome' ? 'Google/Chrome/Application/chrome.exe' : 'Microsoft/Edge/Application/msedge.exe';
+    const executable = [process.env.LAN_TUBE_BROWSER, ...[process.env.PROGRAMFILES, process.env['PROGRAMFILES(X86)'], process.env.LOCALAPPDATA]
+      .filter(Boolean).map(base => join(base, relative))].find(file => file && existsSync(file));
+    if (!executable) throw new AppError('Install Edge or Chrome and select it as your default browser.');
+    await mkdir(profile, {recursive:true});
+    const child = spawn(executable, ['--user-data-dir='+profile,'--remote-debugging-address=127.0.0.1','--remote-debugging-port=0',
+      '--no-first-run','--no-default-browser-check','--new-window','https://www.youtube.com/'], {detached:true,stdio:'ignore',windowsHide:true});
+    let failed = false;
+    child.once('error', () => { failed = true; });
+    child.unref();
+    for (let i = 0; i < 40 && !failed; i++) {
+      await sleep(250);
+      try { return await BackgroundPlayer.connect(browser, null, portFile, targetId); }
+      catch (error) { if (error.status === 409) throw error; }
+    }
+    throw new AppError('Finish opening YouTube in the Glide YT browser window, then try again.');
   }
   async run(cmd) {
     const expression='(async()=>{try{return {value:await ('+pageAction.toString()+')('+JSON.stringify(cmd)+','+readState.toString()+','+controlPlayer.toString()+')}}catch(e){return {error:e.message}}})()';
@@ -164,6 +203,20 @@ export class BackgroundPlayer {
     }
     return cmd.type==='saved' ? {playlists:items} : {episodes:items,hasMore:cmd.type==='moreEpisodes' ? items.length>first.items.length : items.length>=20};
   }
-  onDisconnect(callback) { this.socket.socket.addEventListener('close', callback, {once:true}); }
+  onDisconnect(callback) {
+    const transport = this.socket.socket;
+    // Chromium can detach a tab session while the browser socket stays open.
+    const detached = event => {
+      let message;
+      try { message = JSON.parse(String(event.data)); } catch { return; }
+      if (message.method === 'Target.detachedFromTarget' && message.params?.sessionId === this.sessionId)
+        this.close();
+    };
+    transport.addEventListener('message', detached);
+    transport.addEventListener('close', () => {
+      transport.removeEventListener('message', detached);
+      callback();
+    }, {once:true});
+  }
   close() { this.socket.close(); }
 }

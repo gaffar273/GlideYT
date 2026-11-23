@@ -2,7 +2,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {AppState, NativeModules} from 'react-native';
 import {createClient} from '@lan-tube/core';
 
-export function useRemote(session, onRevoked) {
+export function useRemote(session, onRevoked, onSessionChange) {
   const client = useMemo(() => session ? createClient(session.address, session.token) : null, [session]);
   const [state, setState] = useState(null);
   const [error, setError] = useState('');
@@ -23,12 +23,17 @@ export function useRemote(session, onRevoked) {
           catch (failure) { identified = failure.status === 404 || failure.status === 409; }
         }
         const next = await client.state(controller.signal);
+        if (!stopped && next.laptopId && !session.laptopId) onSessionChange(session, {laptopId:next.laptopId});
         if (!stopped && !sending.current && before === revision.current) { setState(next); setError(''); }
       } catch (failure) {
         if (!stopped && !sending.current && before === revision.current && !controller.signal.aborted) {
           setState(null);
-          if (failure.status === 401) onRevoked();
-          else setError('Laptop unreachable. Check Wi-Fi and that the companion is running.');
+          if (failure.status === 401 && session.laptopId && session.laptopId === failure.laptopId) onRevoked();
+          else {
+            setError('Laptop disconnected. Reconnecting over Wi-Fi…');
+            const address = await NativeModules.RemoteTools.findLaptop(session.address, session.token).catch(() => null);
+            if (!stopped && address && address !== session.address) onSessionChange(session, {address});
+          }
         }
       } finally {
         running = false;
@@ -41,7 +46,7 @@ export function useRemote(session, onRevoked) {
     });
     poll();
     return () => { stopped = true; clearTimeout(timer); controller?.abort(); subscription.remove(); };
-  }, [client, onRevoked]);
+  }, [client, session, onRevoked, onSessionChange]);
   const command = useCallback(async value => {
     if (!client || sending.current) return;
     sending.current = true; revision.current++;
@@ -52,10 +57,10 @@ export function useRemote(session, onRevoked) {
       return result;
     }
     catch (failure) {
-      if (failure.status === 401) onRevoked();
+      if (failure.status === 401 && session.laptopId && session.laptopId === failure.laptopId) onRevoked();
       else if (value.type === 'quality' && /quality options|quality settings are unavailable|resolution is unavailable|option is unavailable in the current YouTube player|show the YouTube tab on your laptop to change this setting/i.test(failure.message)) return {options: []};
       else setError(failure.name === 'AbortError' ? 'The laptop took too long to respond.' : failure.message);
     } finally { sending.current = false; revision.current++; setBusy(false); }
-  }, [client, onRevoked]);
+  }, [client, session, onRevoked]);
   return {client, state, error, busy, command};
 }

@@ -4,6 +4,7 @@ import {mkdir, writeFile, unlink} from 'node:fs/promises';
 import {PairingStore} from './auth.mjs';
 import {ProfileBrowser} from './profile-browser.mjs';
 import {createCompanionServer} from './server.mjs';
+import {startDiscovery} from './discovery.mjs';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const dataDir = resolve(process.env.LAN_TUBE_DATA_DIR || join(root, '.local'));
@@ -16,8 +17,10 @@ const pairing = await new PairingStore(join(dataDir, 'devices.json')).load();
 const browser = new ProfileBrowser(join(dataDir, 'background-controls.json'));
 await browser.loadBackground();
 const {server, adminSecret} = createCompanionServer({browser, pairing, port, onShutdown: stop});
+let discovery;
 server.on('error', error => { console.error(`Companion could not listen on port ${port}: ${error.code}.`); process.exitCode = 1; });
 server.listen(port, '0.0.0.0', async () => {
+  discovery = startDiscovery(port, pairing);
   const setupUrl = `http://127.0.0.1:${port}/#${adminSecret}`;
   try { await writeFile(join(dataDir, 'setup-url.txt'), setupUrl, {mode: 0o600}); }
   catch { console.error('Cannot save Windows app credentials. Check the companion data directory.'); }
@@ -26,6 +29,7 @@ server.listen(port, '0.0.0.0', async () => {
   console.log('Press Ctrl+C to stop the companion. Your browser remains open.\n');
 });
 function stop() {
+  discovery?.close();
   browser.close(); server.close(); server.closeAllConnections();
   unlink(join(dataDir, 'setup-url.txt')).catch(() => {});
 }

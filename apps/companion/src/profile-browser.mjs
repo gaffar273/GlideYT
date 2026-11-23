@@ -1,6 +1,7 @@
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {readFile, rename, writeFile} from 'node:fs/promises';
+import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {BackgroundPlayer} from './background-player.mjs';
 import {AppError} from './errors.mjs';
@@ -10,9 +11,10 @@ import core from '../../../packages/core/index.js';
 const executable = fileURLToPath(new URL('../../windows/MediaControl.exe', import.meta.url));
 
 export class ProfileBrowser {
-  constructor(backgroundFile, connect = BackgroundPlayer.connect) {
+  constructor(backgroundFile, connect = BackgroundPlayer.connect, openPlayer = BackgroundPlayer.open) {
     this.backgroundFile = backgroundFile;
     this.connect = connect;
+    this.openPlayer = openPlayer;
     this.queue = Promise.resolve();
     this.titles = new Map();
     this.selected = {};
@@ -57,8 +59,8 @@ export class ProfileBrowser {
   async loadBackground() {
     try {
       const saved = JSON.parse(await readFile(this.backgroundFile, 'utf8'));
-      if (['msedge', 'chrome'].includes(saved.browser) && typeof saved.targetId === 'string' && saved.targetId) {
-        this.savedBackground = saved;
+      if (['msedge', 'chrome'].includes(saved.browser) && (saved.mode === 'dedicated' || typeof saved.targetId === 'string' && saved.targetId)) {
+        this.savedBackground = {mode:'dedicated', browser:saved.browser, targetId:saved.mode === 'dedicated' ? saved.targetId : undefined};
         this.restoreBackground();
       }
     } catch (error) {
@@ -66,41 +68,45 @@ export class ProfileBrowser {
     }
   }
   restoreBackground() {
-    if (!this.closed && this.savedBackground && !this.background?.socket.connected) {
-      this.connectBackground(this.savedBackground).catch(() => {});
+    if (!this.closed && this.savedBackground && !this.background?.socket.connected && !this.connecting && Date.now() >= (this.retryAfter || 0)) {
+      this.connectBackground(false).catch(() => {});
     }
   }
   async enableBackground() {
-    if (this.connecting) {
-      try { return await this.connecting; } catch { /* A local click can select a replacement tab. */ }
+    if (this.connecting) await this.connecting.catch(() => {});
+    if (this.background?.socket.connected) {
+      await this.background.socket.send('Page.bringToFront', {}, this.background.sessionId);
+      return {ok:true};
     }
-    return this.connectBackground();
+    return this.connectBackground(true);
   }
-  connectBackground(saved) {
+  connectBackground(openWindow) {
     if (!this.connecting) {
-      this.connecting = this.attachBackground(saved).finally(() => { this.connecting = null; });
+      this.connecting = this.attachBackground(openWindow).finally(() => {
+        this.connecting = null;
+        this.retryAfter = Date.now() + 5000;
+      });
     }
     return this.connecting;
   }
-  async attachBackground(saved) {
-    const browser = saved?.browser ?? await this.request({type:'browser'});
-    const title = saved ? undefined : (await this.request({type:'state'})).title;
-    const player = await this.connect(browser, title, undefined, saved?.targetId);
+  async attachBackground(openWindow) {
+    const browser = this.savedBackground?.browser ?? await this.request({type:'browser'});
+    if (!['msedge','chrome'].includes(browser)) throw new AppError('Choose Edge or Chrome as the Windows default browser.');
+    const portFile = join(dirname(this.backgroundFile), 'youtube-' + browser, 'DevToolsActivePort');
+    const targetId = this.savedBackground?.targetId;
+    const player = openWindow ? await this.openPlayer(browser, portFile, targetId) : await this.connect(browser, null, portFile, targetId);
     try {
-      if (!saved) {
-        const preference = {browser, targetId:player.targetId};
+      if (this.closed) throw new AppError('The companion is closing.');
+      const preference = {mode:'dedicated',browser,targetId:player.targetId};
+      if (targetId !== player.targetId || !this.savedBackground) {
         await writeFile(this.backgroundFile + '.tmp', JSON.stringify(preference), {mode:0o600});
         await rename(this.backgroundFile + '.tmp', this.backgroundFile);
-        this.savedBackground = preference;
       }
-      if (this.closed) throw new AppError('The companion is closing.');
-      const previous = this.background;
+      this.savedBackground = preference;
+      this.background?.close();
       this.background = player;
-      previous?.close();
       player.onDisconnect(() => {
-        if (this.background !== player || this.closed) return;
-        this.background = null;
-        this.restoreBackground();
+        if (this.background === player) this.background = null;
       });
       return {ok:true};
     } catch (error) { player.close(); throw error; }
@@ -111,17 +117,17 @@ export class ProfileBrowser {
     return operation;
   }
   async state() {
+    if (this.savedBackground) this.restoreBackground();
     if (this.background?.socket.connected) {
       try { return {...await this.inBackground({type:'state'}), sleepUntil: this.sleepUntil}; }
-      catch { /* Native media state remains available while YouTube navigates. */ }
+      catch (error) { return {connected:false, error:error.message}; }
     }
+    if (this.savedBackground) return {connected:false, error:'Open YouTube from Glide YT on the laptop.'};
     try { return {...await this.request({type: 'state'}), sleepUntil: this.sleepUntil}; }
     catch (error) { return {connected: false, error: error.message}; }
   }
   async open() {
-    const result = await this.request({type: 'open'});
-    this.restoreBackground();
-    return result;
+    return this.savedBackground ? this.enableBackground() : this.request({type:'open'});
   }
   async command(input) {
     const value = core.validateCommand(input);
@@ -142,16 +148,19 @@ export class ProfileBrowser {
     return result;
   }
   async playbackCommand(value) {
+    if (this.savedBackground && !this.background?.socket.connected) {
+      this.restoreBackground();
+      if (this.connecting) await this.connecting;
+      if (!this.background?.socket.connected) throw new AppError('Open YouTube from Glide YT on the laptop.');
+    }
     if (this.background?.socket.connected) return this.inBackground(value);
+    return this.nativeCommand(value);
+  }
+  async nativeCommand(value) {
     if (value.type === 'quality' || value.type === 'speed') return this.request(value);
     if (['saved', 'suggested', 'next', 'previous', 'playlist', 'episodes', 'moreEpisodes'].includes(value.type)) return this.request(value);
     if (value.type === 'select') {
-      try { await this.request(value); } catch (error) {
-        if (this.connecting && /hidden YouTube tab/.test(error.message)) {
-          throw new AppError('Reconnecting to your YouTube tab. Check the laptop for a browser prompt, then select the song again.');
-        }
-        throw error;
-      }
+      await this.request(value);
       this.selected = {videoId: value.videoId, title: this.titles.get(value.videoId)};
       return {ok: true, loading: true};
     }

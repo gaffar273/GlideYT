@@ -30,8 +30,15 @@ Source: "{#SourceDir}\packages\core\*"; DestDir: "{app}\packages\core"; Flags: i
 Source: "{#SourceDir}\dist\android\*.apk"; DestDir: "{app}\dist\android"; Flags: ignoreversion
 Source: "{#SourceDir}\dist\android\build-report.json"; DestDir: "{app}\dist\android"; Flags: ignoreversion
 
+[Tasks]
+Name: "startup"; Description: "Start the Wi-Fi companion when I sign in"
+
 [Icons]
 Name: "{autoprograms}\GlideYT"; Filename: "{app}\GlideYT.exe"; WorkingDir: "{app}"
+Name: "{userstartup}\GlideYT Companion"; Filename: "{app}\GlideYT.exe"; Parameters: "--companion"; WorkingDir: "{app}"; Tasks: startup
+
+[InstallDelete]
+Type: files; Name: "{userstartup}\GlideYT Companion.lnk"; Tasks: not startup
 [Run]
 Filename: "{app}\GlideYT.exe"; Description: "{cm:LaunchProgram,GlideYT}"; Flags: nowait postinstall skipifsilent
 [UninstallRun]

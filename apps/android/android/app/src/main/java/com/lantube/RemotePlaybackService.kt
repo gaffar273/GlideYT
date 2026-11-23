@@ -67,6 +67,7 @@ class RemotePlaybackService : Service() {
         worker.execute {
             val connection = URL(base + if (command == null) "/v1/state" else "/v1/command").openConnection() as HttpURLConnection
             var revoked = false
+            var recovered: String? = null
             val result = try {
                 connection.instanceFollowRedirects = false
                 connection.connectTimeout = 3500
@@ -81,10 +82,14 @@ class RemotePlaybackService : Service() {
                 revoked = connection.responseCode == 401
                 val body = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
                 if (command == null) body else body.optJSONObject("state")
-            } catch (_: Exception) { JSONObject() } finally { connection.disconnect() }
+            } catch (_: Exception) {
+                recovered = LaptopDiscovery.find(base, bearer)
+                JSONObject()
+            } finally { connection.disconnect() }
             main.post {
                 if (current != generation) return@post
-                if (revoked) { stopSelf(); return@post }
+                if (recovered != null) address = recovered!!
+                if (revoked && recovered == null) { stopSelf(); return@post }
                 if (result != null) { state = result; observed = SystemClock.elapsedRealtime() }
                 getSystemService(NotificationManager::class.java).notify(1, notification())
                 main.removeCallbacks(poll)

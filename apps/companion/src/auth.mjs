@@ -14,6 +14,8 @@ const equal = (a, b) => typeof a === 'string' && typeof b === 'string' &&
 export class PairingStore {
   constructor(file, {now = Date.now} = {}) {
     this.file = file; this.now = now; this.devices = []; this.attempts = new Map();
+    this.laptopId = randomBytes(16).toString('hex');
+    this.seen = new Map();
     this.rotate(); this.writeQueue = Promise.resolve();
   }
   async load() {
@@ -21,6 +23,8 @@ export class PairingStore {
       const data = JSON.parse(await readFile(this.file, 'utf8'));
       if (data.version !== 1 || !Array.isArray(data.devices)) throw new Error('Unsupported device store');
       this.devices = data.devices;
+      if (/^[a-f0-9]{32}$/.test(data.laptopId || '')) this.laptopId = data.laptopId;
+      else await this.change(devices => [...devices]);
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
     return this;
   }
@@ -58,7 +62,8 @@ export class PairingStore {
       const device = {id: deviceId, name: String(name || 'Android').slice(0, 60), hash: digest(token), createdAt: this.now(), phoneKey: key};
       return prior ? devices.map(item => item === prior ? device : item) : [...devices, device];
     });
-    return {token, deviceId};
+    this.seen.set(deviceId, this.now());
+    return {token, deviceId, laptopId: this.laptopId};
   }
   authenticate(header) {
     const token = /^Bearer ([a-f0-9]{64})$/.exec(header || '')?.[1];
@@ -80,16 +85,24 @@ export class PairingStore {
   revoke(id, hash) {
     return this.change(devices => devices.filter(device => device.id !== id || (hash && hash !== device.hash)));
   }
-  list() { return this.devices.map(({id, name, createdAt, phoneKey}) => ({id, name, createdAt, legacy: !phoneKey})); }
+  touch(id) { this.seen.set(id, this.now()); }
+  disconnect(id) { this.seen.delete(id); }
+  list() {
+    return this.devices.map(({id, name, createdAt, phoneKey}) => ({
+      id, name, createdAt, legacy: !phoneKey,
+      connected: this.seen.has(id) && this.now() - this.seen.get(id) < 30000,
+    }));
+  }
   change(update) {
     this.writeQueue = this.writeQueue.catch(() => {}).then(async () => {
       const devices = update(this.devices);
       if (devices === this.devices) return;
-      const value = JSON.stringify({version: 1, devices}, null, 2);
+      const value = JSON.stringify({version: 1, laptopId: this.laptopId, devices}, null, 2);
       await mkdir(dirname(this.file), {recursive: true});
       await writeFile(this.file + '.tmp', value, {mode: 0o600});
       await rename(this.file + '.tmp', this.file);
       this.devices = devices;
+      for (const id of this.seen.keys()) if (!devices.some(device => device.id === id)) this.seen.delete(id);
     });
     return this.writeQueue;
   }
